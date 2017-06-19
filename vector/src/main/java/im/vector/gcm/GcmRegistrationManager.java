@@ -61,6 +61,8 @@ public final class GcmRegistrationManager {
     private static final String PREFS_ALLOW_NOTIFICATIONS = "GcmRegistrationManager.PREFS_ALLOW_NOTIFICATIONS";
     private static final String PREFS_TURN_SCREEN_ON = "GcmRegistrationManager.PREFS_TURN_SCREEN_ON";
     private static final String PREFS_ALLOW_BACKGROUND_SYNC = "GcmRegistrationManager.PREFS_ALLOW_BACKGROUND_SYNC";
+
+    private static final String PREFS_PUSHER_REGISTRATION_TOKEN_KEY_FCM = "PREFS_PUSHER_REGISTRATION_TOKEN_KEY_FCM";
     private static final String PREFS_PUSHER_REGISTRATION_TOKEN_KEY = "PREFS_PUSHER_REGISTRATION_TOKEN_KEY";
 
     private static final String PREFS_SYNC_TIMEOUT = "GcmRegistrationManager.PREFS_SYNC_TIMEOUT";
@@ -177,7 +179,45 @@ public final class GcmRegistrationManager {
             return;
         }
 
-        if (mRegistrationState == RegistrationState.UNREGISTRATED) {
+        // remove the GCM registration token after switching to the FCM one
+        if (null != getOldStoredRegistrationToken()) {
+            Log.d(LOG_TAG, "checkRegistrations : remove the GCM registration token after switching to the FCM one");
+
+            mRegistrationToken = getOldStoredRegistrationToken();
+
+            addSessionsRegistrationListener(new ThirdPartyRegistrationListener() {
+                @Override
+                public void onThirdPartyRegistered() {
+                }
+
+                @Override
+                public void onThirdPartyRegistrationFailed() {
+                }
+
+                private void onGCMUnregistred() {
+                    Log.d(LOG_TAG, "resetGCMRegistration : remove the GCM registration token done");
+                    clearOldStoredRegistrationToken();
+                    mRegistrationToken = null;
+
+                    // reset the registration state
+                    mRegistrationState = RegistrationState.UNREGISTRATED;
+                    // try again
+                    checkRegistrations();
+                }
+
+                @Override
+                public void onThirdPartyUnregistered() {
+                    onGCMUnregistred();
+                }
+
+                @Override
+                public void onThirdPartyUnregistrationFailed() {
+                    onGCMUnregistred();
+                }
+            });
+
+            unregister(new ArrayList<>(Matrix.getInstance(mContext).getSessions()), 0);
+        } else if (mRegistrationState == RegistrationState.UNREGISTRATED) {
             Log.d(LOG_TAG, "checkPusherRegistration : try to register to GCM server");
 
             registerToGCM(new GCMRegistrationListener() {
@@ -212,11 +252,12 @@ public final class GcmRegistrationManager {
      * Retrieve the GCM registration token.
      * @return the GCM registration token
      */
-    private String getGCMRegistrationToken() {
+    public String getGCMRegistrationToken() {
         String registrationToken = getStoredRegistrationToken();
 
-        if (registrationToken == null) {
-            registrationToken = GCMHelper.getRegistrationToken(mContext);
+        if (TextUtils.isEmpty(registrationToken)) {
+            Log.d(LOG_TAG, "## getGCMRegistrationToken() : undefined token -> getting a nex one");
+            registrationToken = GCMHelper.getRegistrationToken();
         }
         return registrationToken;
     }
@@ -293,9 +334,16 @@ public final class GcmRegistrationManager {
 
     /**
      * Reset the GCM registration.
-     * @param register set to true to trigger a fresh registration.
      */
-    public void resetGCMRegistration(final boolean register) {
+    public void resetGCMRegistration() {
+        resetGCMRegistration(null);
+    }
+
+    /**
+     * Reset the GCM registration.
+     * @param newToken the new registration token
+     */
+    public void resetGCMRegistration(final String newToken) {
         Log.d(LOG_TAG, "resetGCMRegistration");
 
         if (RegistrationState.SERVER_REGISTERED == mRegistrationState) {
@@ -313,7 +361,7 @@ public final class GcmRegistrationManager {
                 @Override
                 public void onThirdPartyUnregistered() {
                     Log.d(LOG_TAG, "resetGCMRegistration : unregistration is done --> start the registration process");
-                    resetGCMRegistration(register);
+                    resetGCMRegistration(newToken);
                 }
 
                 @Override
@@ -322,11 +370,13 @@ public final class GcmRegistrationManager {
                 }
             });
         } else {
+            final boolean clearEverything = TextUtils.isEmpty(newToken);
+
             Log.d(LOG_TAG, "resetGCMRegistration : Clear the GCM data");
-            clearGCMData(new SimpleApiCallback<Void>() {
+            clearGCMData(clearEverything, new SimpleApiCallback<Void>() {
                 @Override
                 public void onSuccess(Void info) {
-                    if (register) {
+                    if (!clearEverything) {
                         Log.d(LOG_TAG, "resetGCMRegistration : make a full registration process.");
                         register(null);
                     } else {
@@ -529,6 +579,21 @@ public final class GcmRegistrationManager {
                         mPushersList = new ArrayList<>();
                     } else {
                         mPushersList = new ArrayList<>(pushersResponse.pushers);
+
+                        // move the self pusher to the top of the list
+                        Pusher selfPusher = null;
+
+                        for(Pusher pusher : mPushersList) {
+                            if (TextUtils.equals(pusher.pushkey, getGCMRegistrationToken())) {
+                                selfPusher = pusher;
+                                break;
+                            }
+                        }
+
+                        if (null != selfPusher) {
+                            mPushersList.remove(selfPusher);
+                            mPushersList.add(0, selfPusher);
+                        }
                     }
 
                     if (null != callback) {
@@ -740,9 +805,44 @@ public final class GcmRegistrationManager {
     }
 
     /**
+     * Unregister a pusher.
+     * @param pusher the pusher.
+     * @param callback the asynchronous callback
+     */
+    public void unregister(final MXSession session,  final Pusher pusher, final ApiCallback<Void> callback) {
+        session.getPushersRestClient().removeHttpPusher(pusher.pushkey, pusher.appId, pusher.profileTag, pusher.lang, pusher.appDisplayName, pusher.deviceDisplayName, pusher.data.get("url"), new ApiCallback<Void>() {
+            @Override
+            public void onSuccess(Void info) {
+                refreshPushersList(new ArrayList<>(Matrix.getInstance(mContext).getSessions()), callback);
+            }
+
+            @Override
+            public void onNetworkError(Exception e) {
+                if (null != callback) {
+                    callback.onNetworkError(e);
+                }
+            }
+
+            @Override
+            public void onMatrixError(MatrixError e) {
+                if (null != callback) {
+                    callback.onMatrixError(e);
+                }
+            }
+
+            @Override
+            public void onUnexpectedError(Exception e) {
+                if (null != callback) {
+                    callback.onUnexpectedError(e);
+                }
+            }
+        });
+    }
+
+    /**
      * Unregister a session from the 3rd-party app server
      * @param session the session.
-     * @param listener the lisneter
+     * @param listener the listener
      */
     public void unregister(final MXSession session, final ThirdPartyRegistrationListener listener) {
         Log.d(LOG_TAG, "unregister " + session.getMyUserId());
@@ -1000,7 +1100,26 @@ public final class GcmRegistrationManager {
      * @return the GCM registration stored for this version of the app or null if none is stored.
      */
     private String getStoredRegistrationToken() {
+        return getGcmSharedPreferences().getString(PREFS_PUSHER_REGISTRATION_TOKEN_KEY_FCM, null);
+    }
+
+    /**
+     * @return the old registration token (after updating GCM to FCM)
+     */
+    private String getOldStoredRegistrationToken() {
         return getGcmSharedPreferences().getString(PREFS_PUSHER_REGISTRATION_TOKEN_KEY, null);
+    }
+
+    /**
+     * Remove the old registration token
+     */
+    private void clearOldStoredRegistrationToken() {
+        Log.d(LOG_TAG, "Remove old registration token");
+        if (!getGcmSharedPreferences().edit()
+                .remove(PREFS_PUSHER_REGISTRATION_TOKEN_KEY)
+                .commit()) {
+            Log.e(LOG_TAG, "## setStoredRegistrationToken() : commit failed");
+        }
     }
 
     /**
@@ -1011,7 +1130,7 @@ public final class GcmRegistrationManager {
         Log.d(LOG_TAG, "Saving registration token");
 
         if (!getGcmSharedPreferences().edit()
-                .putString(PREFS_PUSHER_REGISTRATION_TOKEN_KEY, registrationToken)
+                .putString(PREFS_PUSHER_REGISTRATION_TOKEN_KEY_FCM, registrationToken)
                 .commit()) {
             Log.e(LOG_TAG, "## setStoredRegistrationToken() : commit failed");
         }
@@ -1019,15 +1138,20 @@ public final class GcmRegistrationManager {
 
     /**
      * Clear the GCM data
+     * @param clearRegistrationToken true to clear the provided GCM token
+     * @param callback the asynchronous callback
      */
-    public void clearGCMData(final ApiCallback callback) {
+    public void clearGCMData(final boolean clearRegistrationToken, final ApiCallback callback) {
         new AsyncTask<Void, Void, Void>() {
             @Override
             protected Void doInBackground(Void... voids) {
                 setStoredRegistrationToken(null);
                 mRegistrationToken = null;
                 mRegistrationState = RegistrationState.UNREGISTRATED;
-                GCMHelper.clearRegistrationToken(mContext);
+
+                if (clearRegistrationToken) {
+                    GCMHelper.clearRegistrationToken();
+                }
                 return null;
             }
 
