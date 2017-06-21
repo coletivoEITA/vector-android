@@ -18,7 +18,7 @@ android {
         versionName rootProject.ext.versionNameProp
 
         // custom values
-        resValue "string", "bug_report_url",  "https://riot.im/bugreports/submit"
+        resValue "string", "bug_report_url",  "https://bugs.rios.org.br/submit"
     }
 
     signingConfigs {
