@@ -1909,10 +1909,10 @@ public class CommonActivityUtils {
             public void onSuccess(byte[] bytesArray) {
                 try {
                     ByteArrayInputStream stream = new ByteArrayInputStream(bytesArray);
-                    String url = session.getMediasCache().saveMedia(stream, "riot-" + System.currentTimeMillis() + ".txt", "text/plain");
+                    String url = session.getMediasCache().saveMedia(stream, "rios-" + System.currentTimeMillis() + ".txt", "text/plain");
                     stream.close();
 
-                    String path = CommonActivityUtils.saveMediaIntoDownloads(appContext, new File(Uri.parse(url).getPath()), "riot-keys.txt", "text/plain");
+                    String path = CommonActivityUtils.saveMediaIntoDownloads(appContext, new File(Uri.parse(url).getPath()), "rios-keys.txt", "text/plain");
 
                     if (null != callback) {
                         callback.onSuccess(path);

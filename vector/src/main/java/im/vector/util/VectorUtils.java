@@ -746,7 +746,7 @@ public class VectorUtils {
      */
     public static void displayAppTac() {
         if (null != VectorApp.getCurrentActivity()) {
-            displayInWebview(VectorApp.getCurrentActivity(), "https://riot.im/tac");
+            displayInWebview(VectorApp.getCurrentActivity(), "http://rios.org.br/termos-de-uso");
         }
     }
 
@@ -755,7 +755,7 @@ public class VectorUtils {
      */
     public static void displayAppCopyright() {
         if (null != VectorApp.getCurrentActivity()) {
-            displayInWebview(VectorApp.getCurrentActivity(), "https://riot.im/copyright");
+            displayInWebview(VectorApp.getCurrentActivity(), "http://rios.org.br/copyright");
         }
     }
 
@@ -764,7 +764,7 @@ public class VectorUtils {
      */
     public static void displayAppPrivacyPolicy() {
         if (null != VectorApp.getCurrentActivity()) {
-            displayInWebview(VectorApp.getCurrentActivity(), "https://riot.im/privacy");
+            displayInWebview(VectorApp.getCurrentActivity(), "http://rios.org.br/privacidade");
         }
     }
 

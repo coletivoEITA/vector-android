@@ -159,7 +159,7 @@ public class VectorApp extends Application {
         mLogsDirectoryFile = new File(getCacheDir().getAbsolutePath() + "/logs");
 
         org.matrix.androidsdk.util.Log.setLogDirectory(mLogsDirectoryFile);
-        org.matrix.androidsdk.util.Log.init("RiotLog");
+        org.matrix.androidsdk.util.Log.init("RiosChatLog");
 
         // log the application version to trace update
         // useful to track backward compatibility issues

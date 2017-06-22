@@ -722,7 +722,7 @@ public class NotificationUtils {
         }
 
         // only one room : display the large bitmap (it should be the room avatar
-        // several rooms : display the Riot avatar
+        // several rooms : display the Rios Chat avatar
         if (notifiedEventsByRoomId.keySet().size() == 1) {
             if (null != largeBitmap) {
                 largeBitmap = NotificationUtils.createSquareBitmap(largeBitmap);

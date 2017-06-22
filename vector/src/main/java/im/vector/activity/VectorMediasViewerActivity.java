@@ -229,7 +229,7 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
                     try {
                         mediaUri = VectorContentProvider.absolutePathToUri(this, renamedFile.getAbsolutePath());
                     } catch (Exception e) {
-                        Log.e(LOG_TAG, "## onAction() : RiotContentProvider.absolutePathToUri failed " + e.getMessage());
+                        Log.e(LOG_TAG, "## onAction() : RiosChatContentProvider.absolutePathToUri failed " + e.getMessage());
                     }
                 }
 

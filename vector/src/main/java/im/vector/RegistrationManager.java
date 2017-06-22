@@ -57,7 +57,7 @@ public class RegistrationManager {
     private static String ERROR_MISSING_STAGE = "ERROR_MISSING_STAGE";
     private static String ERROR_EMPTY_USER_ID = "ERROR_EMPTY_USER_ID";
 
-    private static String NEXTLINK_BASE_URL = "https://riot.im/app";
+    private static String NEXTLINK_BASE_URL = "https://app.rios.org.br";
 
     // JSON keys used for registration request
     private static final String JSON_KEY_CLIENT_SECRET = "client_secret";
