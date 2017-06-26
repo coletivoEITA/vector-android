@@ -13,8 +13,8 @@
     <color name="vector_deemed_background_view_gray_color">#339D9D9D</color>
 
     <!-- action bar color -->
-    <color name="vector_statusbar_color">#5EA584</color>
-    <color name="vector_actionbar_background">#76CFA6</color>
+    <color name="vector_statusbar_color">#964a8c</color>
+    <color name="vector_actionbar_background">#ad78bf</color>
     <color name="vector_actionbar_text_color">#FFFFFF</color>
     <color name="vector_actionbar_icons_color">#FFFFFF</color>
 
@@ -22,7 +22,7 @@
     <color name="vector_activity_background_color">#FFF</color>
 
     <color name="vector_not_send_color">#FFFF4444</color>
-    <color name="vector_green_color">#FF76cfa6</color>
+    <color name="vector_green_color">#ad78bf</color>
     <color name="vector_light_gray_color">#FFF2F2F2</color>
     <color name="vector_silver_color">#FFC7C7C7</color>
 
@@ -44,7 +44,7 @@
     <color name="vector_4d_gray">#FF4D4D4D</color>
 
     <!-- FloatingActionButton -->
-    <color name="vector_fuchsia_color">#ff0064</color>
+    <color name="vector_fuchsia_color">#38af00</color>
 
     <color name="vector_text_gray_color">#FF9D9D9D</color>
 
