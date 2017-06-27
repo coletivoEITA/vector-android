@@ -1,5 +1,8 @@
-Changes in Riot 0.6.12 (2017-06-12)
+Changes in Riot 0.6.13 (2017-06-12)
 =======================================================
+
+Features:
+ * First step in rebranding Riot App to Rios Chat App
 
 Bugfixes:
  * #1302 : No room / few rooms are displayed an application update / first launch.
