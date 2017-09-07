@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 OpenMarket Ltd
  * Copyright 2017 Vector Creations Ltd
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -47,7 +47,7 @@ import java.util.List;
 import im.vector.R;
 import im.vector.adapters.ParticipantAdapterItem;
 import im.vector.adapters.VectorRoomCreationAdapter;
-
+import im.vector.util.ThemeUtils;
 
 public class VectorRoomCreationActivity extends MXCActionBarActivity {
     // tags
@@ -113,6 +113,7 @@ public class VectorRoomCreationActivity extends MXCActionBarActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_vector_room_creation);
 
         if (CommonActivityUtils.shouldRestartApp(this)) {
@@ -214,12 +215,10 @@ public class VectorRoomCreationActivity extends MXCActionBarActivity {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == INVITE_USER_REQUEST_CODE) {
-
             if (resultCode == Activity.RESULT_OK) {
-                ParticipantAdapterItem item = (ParticipantAdapterItem) data.getSerializableExtra(VectorRoomInviteMembersActivity.EXTRA_SELECTED_PARTICIPANT_ITEM);
-                mParticipants.add(item);
-
-                mAdapter.add(item);
+                List<ParticipantAdapterItem> items = (List<ParticipantAdapterItem>) data.getSerializableExtra(VectorRoomInviteMembersActivity.EXTRA_OUT_SELECTED_PARTICIPANT_ITEMS);
+                mParticipants.addAll(items);
+                mAdapter.addAll(items);
                 mAdapter.sort(mAlphaComparator);
             } else if (1 == mParticipants.size()) {
                 // the user cancels the first user selection so assume he wants to cancel the room creation.
@@ -270,6 +269,8 @@ public class VectorRoomCreationActivity extends MXCActionBarActivity {
         }
 
         getMenuInflater().inflate(R.menu.vector_room_creation, menu);
+        CommonActivityUtils.tintMenuIcons(menu, ThemeUtils.getColor(this, R.attr.icon_tint_on_dark_action_bar_color));
+
 
         return true;
     }
@@ -415,6 +416,8 @@ public class VectorRoomCreationActivity extends MXCActionBarActivity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    // update the read markers
+                    room.markAllAsRead(null);
                     HashMap<String, Object> params = new HashMap<>();
                     params.put(VectorRoomActivity.EXTRA_MATRIX_ID, mSession.getMyUserId());
                     params.put(VectorRoomActivity.EXTRA_ROOM_ID, room.getRoomId());

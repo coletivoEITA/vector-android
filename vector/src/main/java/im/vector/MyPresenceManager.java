@@ -18,7 +18,6 @@ package im.vector;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
-import org.matrix.androidsdk.util.Log;
 
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.data.MyUser;
@@ -144,9 +143,6 @@ public class MyPresenceManager {
     public void advertisePresence(String presence) {
         if (!latestAdvertisedPresence.equals(presence)) {
             latestAdvertisedPresence = presence;
-
-            Log.d(LOG_TAG, "Advertising presence " + presence);
-            myUser.updatePresence(presence, null, null);
         }
     }
 

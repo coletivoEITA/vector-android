@@ -21,21 +21,20 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.provider.Browser;
 import android.support.v4.app.FragmentManager;
-import android.content.SharedPreferences;
-import android.preference.PreferenceManager;
 import android.text.TextUtils;
-
-import org.matrix.androidsdk.util.Log;
-
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -45,9 +44,10 @@ import com.google.gson.JsonElement;
 
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.adapters.MessageRow;
-import org.matrix.androidsdk.adapters.MessagesAdapter;
+import org.matrix.androidsdk.adapters.AbstractMessagesAdapter;
 import org.matrix.androidsdk.crypto.data.MXDeviceInfo;
 import org.matrix.androidsdk.crypto.data.MXUsersDevicesMap;
+import org.matrix.androidsdk.data.EventTimeline;
 import org.matrix.androidsdk.data.RoomState;
 import org.matrix.androidsdk.db.MXMediasCache;
 import org.matrix.androidsdk.fragments.MatrixMessageListFragment;
@@ -63,31 +63,34 @@ import org.matrix.androidsdk.rest.model.ImageMessage;
 import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.rest.model.Message;
 import org.matrix.androidsdk.rest.model.VideoMessage;
+import org.matrix.androidsdk.rest.model.bingrules.BingRule;
 import org.matrix.androidsdk.util.JsonUtils;
-
-import im.vector.Matrix;
-import im.vector.R;
-import im.vector.VectorApp;
-import im.vector.activity.CommonActivityUtils;
-import im.vector.activity.MXCActionBarActivity;
-import im.vector.activity.VectorHomeActivity;
-import im.vector.activity.VectorMemberDetailsActivity;
-import im.vector.activity.VectorRoomActivity;
-import im.vector.activity.VectorMediasViewerActivity;
-import im.vector.adapters.VectorMessagesAdapter;
-import im.vector.db.VectorContentProvider;
-import im.vector.receiver.VectorUniversalLinkReceiver;
-import im.vector.util.SlidableMediaInfo;
-import im.vector.util.VectorUtils;
+import org.matrix.androidsdk.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 
-public class VectorMessageListFragment extends MatrixMessageListFragment implements VectorMessagesAdapter.VectorMessagesAdapterActionsListener {
+import im.vector.Matrix;
+import im.vector.R;
+import im.vector.activity.CommonActivityUtils;
+import im.vector.activity.MXCActionBarActivity;
+import im.vector.activity.VectorHomeActivity;
+import im.vector.activity.VectorMediasViewerActivity;
+import im.vector.activity.VectorMemberDetailsActivity;
+import im.vector.activity.VectorRoomActivity;
+import im.vector.adapters.VectorMessagesAdapter;
+import im.vector.db.VectorContentProvider;
+import im.vector.listeners.IMessagesAdapterActionsListener;
+import im.vector.receiver.VectorUniversalLinkReceiver;
+import im.vector.util.SlidableMediaInfo;
+import im.vector.util.ThemeUtils;
+import im.vector.util.VectorUtils;
+
+public class VectorMessageListFragment extends MatrixMessageListFragment implements IMessagesAdapterActionsListener {
     private static final String LOG_TAG = "VectorMessageListFrg";
 
     public interface IListFragmentEventListener {
@@ -144,6 +147,15 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             ((VectorMessagesAdapter) mAdapter).mIsRoomEncrypted = mRoom.isEncrypted();
         }
 
+        mMessageListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                onRowClick(position);
+            }
+        });
+
+        v.setBackgroundColor(ThemeUtils.getColor(getActivity(), R.attr.riot_primary_background_color));
+
         return v;
     }
 
@@ -186,7 +198,20 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         super.onPause();
 
         if (mAdapter instanceof VectorMessagesAdapter) {
-            ((VectorMessagesAdapter) mAdapter).onPause();
+            VectorMessagesAdapter adapter = ((VectorMessagesAdapter) mAdapter);
+
+            adapter.setVectorMessagesAdapterActionsListener(null);
+            adapter.onPause();
+        }
+    }
+
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mAdapter instanceof VectorMessagesAdapter) {
+            VectorMessagesAdapter adapter = ((VectorMessagesAdapter) mAdapter);
+            adapter.setVectorMessagesAdapterActionsListener(this);
         }
     }
 
@@ -198,6 +223,10 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     public void onDetach() {
         super.onDetach();
         mHostActivityListener = null;
+
+        mBackProgressView = null;
+        mForwardProgressView = null;
+        mMainProgressView = null;
     }
 
     @Override
@@ -211,10 +240,8 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     }
 
     @Override
-    public MessagesAdapter createMessagesAdapter() {
-        VectorMessagesAdapter vectorMessagesAdapter = new VectorMessagesAdapter(mSession, getActivity(), getMXMediasCache());
-        vectorMessagesAdapter.setVectorMessagesAdapterActionsListener(this);
-        return vectorMessagesAdapter;
+    public AbstractMessagesAdapter createMessagesAdapter() {
+        return new VectorMessagesAdapter(mSession, getActivity(), getMXMediasCache());
     }
 
     /**
@@ -245,6 +272,33 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     public void setIsRoomEncrypted(boolean isEncrypted) {
         ((VectorMessagesAdapter) mAdapter).mIsRoomEncrypted = isEncrypted;
         mAdapter.notifyDataSetChanged();
+    }
+
+    /**
+     * Get the message list view
+     *
+     * @return message list view
+     */
+    public ListView getMessageListView() {
+        return mMessageListView;
+    }
+
+    /**
+     * Get the message adapter
+     *
+     * @return message adapter
+     */
+    public AbstractMessagesAdapter getMessageAdapter() {
+        return mAdapter;
+    }
+
+    /**
+     * Get the event timeline
+     *
+     * @return
+     */
+    public EventTimeline getEventTimeline() {
+        return mEventTimeLine;
     }
 
     /**
@@ -413,7 +467,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         dialog.show();
 
         if (null == deviceInfo) {
-            mSession.getCrypto().getDeviceList().downloadKeys(Arrays.asList(event.getSender()), true, new ApiCallback<MXUsersDevicesMap<MXDeviceInfo>>() {
+            mSession.getCrypto().getDeviceList().downloadKeys(Collections.singletonList(event.getSender()), true, new ApiCallback<MXUsersDevicesMap<MXDeviceInfo>>() {
                 @Override
                 public void onSuccess(MXUsersDevicesMap<MXDeviceInfo> info) {
                     if (dialog.isShowing()) {
@@ -508,7 +562,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    new AlertDialog.Builder(VectorApp.getCurrentActivity())
+                    new AlertDialog.Builder(getActivity())
                             .setMessage((action == R.id.ic_action_vector_cancel_upload) ? R.string.attachment_cancel_upload : R.string.attachment_cancel_download)
                             .setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                                 @Override
@@ -538,7 +592,19 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             Activity attachedActivity = getActivity();
 
             if ((null != attachedActivity) && (attachedActivity instanceof VectorRoomActivity)) {
-                ((VectorRoomActivity) attachedActivity).insertQuoteInTextEditor("> " + textMsg + "\n\n");
+                // Quote all paragraphs instead
+                String[] messageParagraphs = textMsg.split("\n\n");
+                String quotedTextMsg = "";
+                for(int i = 0; i < messageParagraphs.length; i++) {
+                    if(!messageParagraphs[i].trim().equals("")) {
+                        quotedTextMsg += "> " + messageParagraphs[i];
+                    }
+
+                    if (!((i + 1) == messageParagraphs.length)) {
+                        quotedTextMsg += "\n\n";
+                    }
+                }
+                ((VectorRoomActivity) attachedActivity).insertQuoteInTextEditor(quotedTextMsg + "\n\n");
             }
         } else if ((action == R.id.ic_action_vector_share) || (action == R.id.ic_action_vector_forward) || (action == R.id.ic_action_vector_save)) {
             //
@@ -592,7 +658,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             VectorUtils.copyToClipboard(getActivity(), VectorUtils.getPermalink(event.roomId, event.eventId));
         } else if (action == R.id.ic_action_vector_report) {
             onMessageReport(event);
-        } else if (action == R.id.ic_action_view_source) {
+        } else if ((action == R.id.ic_action_view_source) || (action == R.id.ic_action_view_decrypted_source)) {
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -602,7 +668,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     TextView textview = (TextView) view.findViewById(R.id.event_content_text_view);
 
                     Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                    textview.setText(gson.toJson(JsonUtils.toJson(event)));
+                    textview.setText(gson.toJson(JsonUtils.toJson((action == R.id.ic_action_view_source) ? event : event.getClearEvent())));
                     builder.setView(view);
 
                     builder.setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
@@ -641,7 +707,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 mRoom.report(event.eventId, -100, reason, new SimpleApiCallback<Void>(getActivity()) {
                     @Override
                     public void onSuccess(Void info) {
-                        new AlertDialog.Builder(VectorApp.getCurrentActivity())
+                        new AlertDialog.Builder(getActivity())
                                 .setMessage(R.string.room_event_action_report_prompt_ignore_user)
                                 .setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                                     @Override
@@ -696,15 +762,18 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         if (null != file) {
             // download
             if ((menuAction == ACTION_VECTOR_SAVE) || (menuAction == ACTION_VECTOR_OPEN)) {
-                String savedMediaPath = CommonActivityUtils.saveMediaIntoDownloads(getActivity(), file, filename, mediaMimeType);
-
-                if (null != savedMediaPath) {
-                    if (menuAction == ACTION_VECTOR_SAVE) {
-                        Toast.makeText(getActivity(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
-                    } else {
-                        CommonActivityUtils.openMedia(getActivity(), savedMediaPath, mediaMimeType);
+                CommonActivityUtils.saveMediaIntoDownloads(getActivity(), file, filename, mediaMimeType, new SimpleApiCallback<String>() {
+                    @Override
+                    public void onSuccess(String savedMediaPath) {
+                        if (null != savedMediaPath) {
+                            if (menuAction == ACTION_VECTOR_SAVE) {
+                                Toast.makeText(getActivity(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
+                            } else {
+                                CommonActivityUtils.openMedia(getActivity(), savedMediaPath, mediaMimeType);
+                            }
+                        }
                     }
-                }
+                });
             } else {
                 // shared / forward
                 Uri mediaUri = null;
@@ -747,7 +816,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             }
         } else {
             // else download it
-            final String downloadId = mediasCache.downloadMedia(getActivity(), mSession.getHomeserverConfig(), mediaUrl, mediaMimeType, encryptedFileInfo);
+            final String downloadId = mediasCache.downloadMedia(getActivity().getApplicationContext(), mSession.getHomeserverConfig(), mediaUrl, mediaMimeType, encryptedFileInfo);
             mAdapter.notifyDataSetChanged();
 
             if (null != downloadId) {
@@ -756,7 +825,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     public void onDownloadError(String downloadId, JsonElement jsonElement) {
                         MatrixError error = JsonUtils.toMatrixError(jsonElement);
 
-                        if ((null != error) && error.isSupportedErrorCode()) {
+                        if ((null != error) && error.isSupportedErrorCode() && (null != VectorMessageListFragment.this.getActivity())) {
                             Toast.makeText(VectorMessageListFragment.this.getActivity(), error.getLocalizedMessage(), Toast.LENGTH_LONG).show();
                         }
                     }
@@ -1025,7 +1094,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             if (fragment != null) {
                 fragment.dismissAllowingStateLoss();
             }
-            fragment = VectorReadReceiptsDialogFragment.newInstance(mSession, mRoom.getRoomId(), eventId);
+            fragment = VectorReadReceiptsDialogFragment.newInstance(mSession.getMyUserId(), mRoom.getRoomId(), eventId);
             fragment.show(fm, TAG_FRAGMENT_RECEIPTS_DIALOG);
         } catch (Exception e) {
             Log.e(LOG_TAG, "## onMoreReadReceiptClick() failed " + e.getMessage());
@@ -1102,5 +1171,64 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         } catch (Exception e) {
             Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage());
         }
+    }
+
+    private int mInvalidIndexesCount = 0;
+
+    @Override
+    public void onInvalidIndexes() {
+        mInvalidIndexesCount++;
+
+        // it should happen once
+        // else we assume that the adapter is really corrupted
+        // It seems better to close the linked activity to avoid infinite refresh.
+        if (1 == mInvalidIndexesCount) {
+            mMessageListView.post(new Runnable() {
+                @Override
+                public void run() {
+                    mAdapter.notifyDataSetChanged();
+                }
+            });
+        } else {
+            mMessageListView.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (null != getActivity()) {
+                        getActivity().finish();
+                    }
+                }
+            });
+        }
+    }
+
+
+    private final HashMap<String, Object> mBingRulesByEventId = new HashMap<>();
+
+    @Override
+    public boolean shouldHighlightEvent(Event event) {
+        String eventId = event.eventId;
+
+        // cache the dedicated rule because it is slow to find them out
+        Object ruleAsVoid = mBingRulesByEventId.get(eventId);
+
+        if (null != ruleAsVoid) {
+            if (ruleAsVoid instanceof BingRule) {
+                return ((BingRule) ruleAsVoid).shouldHighlight();
+            }
+            return false;
+        }
+
+        boolean res = false;
+
+        BingRule rule = mSession.getDataHandler().getBingRulesManager().fulfilledBingRule(event);
+
+        if (null != rule) {
+            res = rule.shouldHighlight();
+            mBingRulesByEventId.put(eventId, rule);
+        } else {
+            mBingRulesByEventId.put(eventId, eventId);
+        }
+
+        return res;
     }
 }

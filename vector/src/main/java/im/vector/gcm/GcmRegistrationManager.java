@@ -24,7 +24,6 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.text.TextUtils;
 
-import org.matrix.androidsdk.MXDataHandler;
 import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
 import org.matrix.androidsdk.util.Log;
 
@@ -38,6 +37,7 @@ import org.matrix.androidsdk.rest.model.PushersResponse;
 import im.vector.Matrix;
 import im.vector.R;
 import im.vector.activity.CommonActivityUtils;
+import im.vector.util.PreferencesManager;
 import retrofit.RetrofitError;
 
 
@@ -286,45 +286,57 @@ public final class GcmRegistrationManager {
         if (mRegistrationState == RegistrationState.UNREGISTRATED) {
             mRegistrationState = RegistrationState.GCM_REGISTRATING;
 
-            new AsyncTask<Void, Void, String>() {
-                @Override
-                protected String doInBackground(Void... voids) {
-                    String registrationToken = getGCMRegistrationToken();
+            try {
+                new AsyncTask<Void, Void, String>() {
+                    @Override
+                    protected String doInBackground(Void... voids) {
+                        String registrationToken = getGCMRegistrationToken();
 
-                    if (registrationToken != null) {
-                        mRegistrationToken = registrationToken;
+                        if (registrationToken != null) {
+                            mRegistrationToken = registrationToken;
+                        }
+
+                        return registrationToken;
                     }
 
-                    return registrationToken;
-                }
+                    @Override
+                    protected void onPostExecute(String pushKey) {
+                        mRegistrationState = (pushKey != null) ? RegistrationState.GCM_REGISTRED : RegistrationState.UNREGISTRATED;
+                        setStoredRegistrationToken(pushKey);
 
-                @Override
-                protected void onPostExecute(String pushKey) {
-                    mRegistrationState = (pushKey != null) ? RegistrationState.GCM_REGISTRED : RegistrationState.UNREGISTRATED;
-                    setStoredRegistrationToken(pushKey);
-
-                    // warn the listener
-                    if (null != gcmRegistrationListener) {
-                        try {
-                            if (pushKey != null) {
-                                gcmRegistrationListener.onGCMRegistered();
-                            } else {
-                                gcmRegistrationListener.onGCMRegistrationFailed();
+                        // warn the listener
+                        if (null != gcmRegistrationListener) {
+                            try {
+                                if (pushKey != null) {
+                                    gcmRegistrationListener.onGCMRegistered();
+                                } else {
+                                    gcmRegistrationListener.onGCMRegistrationFailed();
+                                }
+                            } catch (Exception e) {
+                                Log.e(LOG_TAG, "registerToGCM : onPusherRegistered/onPusherRegistrationFailed failed " + e.getMessage());
                             }
-                        } catch (Exception e) {
-                            Log.e(LOG_TAG, "registerToGCM : onPusherRegistered/onPusherRegistrationFailed failed " + e.getLocalizedMessage());
+                        }
+
+                        if (mRegistrationState == RegistrationState.GCM_REGISTRED) {
+                            // register the sessions to the 3rd party server
+                            // this setting should be updated from the listener
+                            if (useGCM()) {
+                                register(null);
+                            }
                         }
                     }
-
-                    if (mRegistrationState == RegistrationState.GCM_REGISTRED) {
-                        // register the sessions to the 3rd party server
-                        // this setting should be updated from the listener
-                        if (useGCM()) {
-                            register(null);
-                        }
+                }.execute();
+            } catch (Exception e) {
+                Log.e(LOG_TAG, "## registerToGCM() failed " + e.getMessage());
+                // warn the listener
+                if (null != gcmRegistrationListener) {
+                    try {
+                        gcmRegistrationListener.onGCMRegistrationFailed();
+                    } catch (Exception e2) {
+                        Log.e(LOG_TAG, "registerToGCM : onPusherRegistered/onPusherRegistrationFailed failed " + e2.getMessage());
                     }
                 }
-            }.execute();
+            }
         } else if (mRegistrationState == RegistrationState.GCM_REGISTRATING) {
             gcmRegistrationListener.onGCMRegistrationFailed();
         } else {
@@ -1016,6 +1028,14 @@ public final class GcmRegistrationManager {
     }
 
     /**
+     * Tell if the application can be restarted in background
+     * @return true if the application can be restarted in background
+     */
+    public boolean canStartAppInBackground() {
+        return isBackgroundSyncAllowed() || (null != getStoredRegistrationToken());
+    }
+
+    /**
      * Allow the background sync
      * @param isAllowed true to allow the background sync.
      */
@@ -1059,9 +1079,10 @@ public final class GcmRegistrationManager {
      * @return the delay between two syncs in ms.
      */
     public int getBackgroundSyncDelay() {
-        // on fdroid version, the default sync delay is about 10 seconds
-        if ((null == mRegistrationToken) && !getGcmSharedPreferences().contains(PREFS_SYNC_DELAY)) {
-            return 10000;
+        // on fdroid version, the default sync delay is about 10 minutes
+        // set a large value because many users don't know it can be defined from the settings page
+        if ((null == mRegistrationToken) && (null == getStoredRegistrationToken()) && !getGcmSharedPreferences().contains(PREFS_SYNC_DELAY)) {
+            return 10 * 60 * 1000;
         } else {
             int currentValue = 0;
             MXSession session = Matrix.getInstance(mContext).getDefaultSession();
@@ -1142,27 +1163,35 @@ public final class GcmRegistrationManager {
      * @param callback the asynchronous callback
      */
     public void clearGCMData(final boolean clearRegistrationToken, final ApiCallback callback) {
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... voids) {
-                setStoredRegistrationToken(null);
-                mRegistrationToken = null;
-                mRegistrationState = RegistrationState.UNREGISTRATED;
+        try {
+            new AsyncTask<Void, Void, Void>() {
+                @Override
+                protected Void doInBackground(Void... voids) {
+                    setStoredRegistrationToken(null);
+                    mRegistrationToken = null;
+                    mRegistrationState = RegistrationState.UNREGISTRATED;
 
-                if (clearRegistrationToken) {
-                    GCMHelper.clearRegistrationToken();
-                }
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void nothing) {
-                if (null != callback) {
-                    callback.onSuccess(null);
+                    if (clearRegistrationToken) {
+                        GCMHelper.clearRegistrationToken();
+                    }
+                    return null;
                 }
 
+                @Override
+                protected void onPostExecute(Void nothing) {
+                    if (null != callback) {
+                        callback.onSuccess(null);
+                    }
+
+                }
+            }.execute();
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "## clearGCMData failed " + e.getMessage());
+
+            if (null != callback) {
+                callback.onUnexpectedError(e);
             }
-        }.execute();
+        }
     }
 
     //================================================================================
@@ -1185,6 +1214,9 @@ public final class GcmRegistrationManager {
      * Dispatch the onThirdPartyRegistered to the listeners.
      */
     private void dispatchOnThirdPartyRegistered() {
+        // disable the application start on device boot
+        PreferencesManager.setAutoStartOnBoot(mContext, false);
+
         synchronized (this) {
             for(ThirdPartyRegistrationListener listener : mThirdPartyRegistrationListeners) {
                 try {

@@ -25,12 +25,13 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBar.TabListener;
-import org.matrix.androidsdk.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Toast;
 
 import org.matrix.androidsdk.fragments.MatrixMessageListFragment;
 import org.matrix.androidsdk.listeners.MXEventListener;
+import org.matrix.androidsdk.util.Log;
 
 import java.util.List;
 
@@ -40,6 +41,7 @@ import im.vector.contacts.ContactsManager;
 import im.vector.fragments.VectorRoomDetailsMembersFragment;
 import im.vector.fragments.VectorRoomSettingsFragment;
 import im.vector.fragments.VectorSearchRoomFilesListFragment;
+import im.vector.util.ThemeUtils;
 
 /**
  * This class implements the room details screen, using a tab UI pattern.
@@ -195,6 +197,16 @@ public class VectorRoomDetailsActivity extends MXCActionBarActivity implements T
         }
     }
 
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                finish();
+                return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
     /**
      * Back key management
      */
@@ -318,7 +330,7 @@ public class VectorRoomDetailsActivity extends MXCActionBarActivity implements T
             tabIndexToRestore = PEOPLE_TAB_INDEX;
         }
 
-        mActionBar.setStackedBackgroundDrawable(new ColorDrawable(getResources().getColor(R.color.vector_tabbar_background_color)));
+        mActionBar.setStackedBackgroundDrawable(new ColorDrawable(ThemeUtils.getColor(this, R.attr.tab_bar_background_color)));
 
         // set the tab to display & set current tab index
         mActionBar.setSelectedNavigationItem(tabIndexToRestore);

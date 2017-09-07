@@ -19,7 +19,6 @@ package im.vector.activity;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -32,6 +31,7 @@ import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import org.matrix.androidsdk.util.Log;
@@ -70,7 +70,7 @@ import im.vector.view.VectorPendingCallView;
 /**
  * VectorCallViewActivity is the call activity.
  */
-public class VectorCallViewActivity extends Activity implements SensorEventListener {
+public class VectorCallViewActivity extends AppCompatActivity implements SensorEventListener {
     private static final String LOG_TAG = "VCallViewActivity";
     private static final String HANGUP_MSG_HEADER_UI_CALL = "user hangup from header back arrow";
     private static final String HANGUP_MSG_BACK_KEY = "user hangup from back key";
@@ -426,7 +426,9 @@ public class VectorCallViewActivity extends Activity implements SensorEventListe
             // or it's still valid
             if (!canCallBeResumed() || (null == mCall.getSession().mCallsManager.getCallWithCallId(mCall.getCallId()))) {
                 Log.d(LOG_TAG, "Hide the call notifications because the current one cannot be resumed");
-                EventStreamService.getInstance().hideCallNotifications();
+                if (null != EventStreamService.getInstance()) {
+                    EventStreamService.getInstance().hideCallNotifications();
+                }
                 mCall = null;
                 mSavedCallView = null;
             }
@@ -490,6 +492,7 @@ public class VectorCallViewActivity extends Activity implements SensorEventListe
             RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT);
             params.addRule(RelativeLayout.CENTER_IN_PARENT, RelativeLayout.TRUE);
             layout.removeView(mCallView);
+            layout.setVisibility(View.VISIBLE);
 
             // add the call view only is the call is a video one
             if (mCall.isVideo()) {
@@ -504,6 +507,7 @@ public class VectorCallViewActivity extends Activity implements SensorEventListe
     public void onCreate(Bundle savedInstanceState) {
         Log.d(LOG_TAG,"## onCreate(): IN");
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_callview);
         instance = this;
 
@@ -675,7 +679,9 @@ public class VectorCallViewActivity extends Activity implements SensorEventListe
             }
         } else {
             Log.d(LOG_TAG, "## onCreate(): Hide the call notifications");
-            EventStreamService.getInstance().hideCallNotifications();
+            if (null != EventStreamService.getInstance()) {
+                EventStreamService.getInstance().hideCallNotifications();
+            }
             mSavedCallView = null;
             mSavedLocalVideoLayoutConfig = null;
 
@@ -683,7 +689,10 @@ public class VectorCallViewActivity extends Activity implements SensorEventListe
             this.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mCall.createCallView();
+                    // call once
+                    if (mCall.isVideo() || (!mCall.isIncoming() && (TextUtils.equals(IMXCall.CALL_STATE_CREATED, mCall.getCallState())))) {
+                        mCall.createCallView();
+                    }
                 }
             });
         }
@@ -1395,7 +1404,9 @@ public class VectorCallViewActivity extends Activity implements SensorEventListe
 
         if (mIsCallEnded || mIsCalleeBusy) {
             Log.d(LOG_TAG, "onDestroy: Hide the call notifications");
-            EventStreamService.getInstance().hideCallNotifications();
+            if (null != EventStreamService.getInstance()) {
+                EventStreamService.getInstance().hideCallNotifications();
+            }
 
             if (mIsCalleeBusy) {
                 VectorCallSoundManager.startBusyCallSound();

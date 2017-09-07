@@ -35,6 +35,7 @@ import im.vector.R;
 import im.vector.adapters.CountryAdapter;
 import im.vector.util.CountryPhoneData;
 import im.vector.util.PhoneNumberUtils;
+import im.vector.util.ThemeUtils;
 
 public class CountryPickerActivity extends AppCompatActivity implements CountryAdapter.OnSelectCountryListener, SearchView.OnQueryTextListener {
 
@@ -72,6 +73,9 @@ public class CountryPickerActivity extends AppCompatActivity implements CountryA
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // required to have the right translated title
+        setTitle(R.string.settings_select_country);
         setContentView(R.layout.activity_country_picker);
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -92,6 +96,7 @@ public class CountryPickerActivity extends AppCompatActivity implements CountryA
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_country_picker, menu);
+        CommonActivityUtils.tintMenuIcons(menu, ThemeUtils.getColor(this, R.attr.icon_tint_on_dark_action_bar_color));
 
         final MenuItem searchItem = menu.findItem(R.id.action_search);
         if (searchItem != null) {
@@ -102,6 +107,9 @@ public class CountryPickerActivity extends AppCompatActivity implements CountryA
             mSearchView.setQueryHint(getString(R.string.search_hint));
             mSearchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
             mSearchView.setOnQueryTextListener(this);
+
+            SearchView.SearchAutoComplete searchAutoComplete = (SearchView.SearchAutoComplete) mSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
+            searchAutoComplete.setHintTextColor(ThemeUtils.getColor(this, R.attr.default_text_hint_color));
         }
         return true;
     }

@@ -1,13 +1,13 @@
 /**
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Copyright 2017 Vector Creations Ltd
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,6 @@
 
 package im.vector.gcm;
 
-import android.text.TextUtils;
-
 import org.matrix.androidsdk.util.Log;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -26,9 +24,9 @@ import com.google.firebase.messaging.RemoteMessage;
 import com.google.gson.JsonParser;
 
 import org.matrix.androidsdk.MXSession;
-import org.matrix.androidsdk.data.RoomState;
 import org.matrix.androidsdk.rest.model.Event;
 
+import java.util.Collection;
 import java.util.Map;
 
 import im.vector.Matrix;
@@ -56,13 +54,12 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
      */
     private Event parseEvent(Map<String, String> data) {
         // accept only event with room id.
-        if ((null == data) || !data.containsKey("room_id")) {
+        if ((null == data) || !data.containsKey("room_id") || !data.containsKey("id")) {
             return null;
         }
 
-        Event event = new Event();
-
         try {
+            Event event = new Event();
             event.eventId = data.get("id");
             event.sender = data.get("sender");
             event.roomId = data.get("room_id");
@@ -72,10 +69,9 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
             return event;
         } catch (Exception e) {
             Log.e(LOG_TAG, "buildEvent fails " + e.getLocalizedMessage());
-            event = null;
         }
 
-        return event;
+        return null;
     }
 
     /**
@@ -86,16 +82,25 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
      */
     private void onMessageReceivedInternal(final Map<String, String> data) {
         try {
-            // privacy
-                /*for (String key : data.keySet()) {
-                    Log.d(LOG_TAG, "## onMessageReceived() >>> " + key + " : " + data.get(key));
-                }*/
-
             int unreadCount = 0;
+            String roomId = null;
+            String eventId = null;
 
             if ((null != data) && data.containsKey("unread")) {
-                unreadCount = Integer.parseInt(data.get("unread"));
+                if (data.containsKey("unread")) {
+                    unreadCount = Integer.parseInt(data.get("unread"));
+                }
+
+                if (data.containsKey("room_id")) {
+                    roomId = data.get("room_id");
+                }
+
+                if (data.containsKey("id")) {
+                    eventId = data.get("id");
+                }
             }
+
+            Log.d(LOG_TAG, "## onMessageReceivedInternal() : roomId " + roomId + " eventId " + eventId + " unread " + unreadCount);
 
             // update the badge counter
             CommonActivityUtils.updateBadgeCount(getApplicationContext(), unreadCount);
@@ -103,45 +108,19 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
             GcmRegistrationManager gcmManager = Matrix.getInstance(getApplicationContext()).getSharedGCMRegistrationManager();
 
             if (!gcmManager.areDeviceNotificationsAllowed()) {
-                Log.d(LOG_TAG, "## onMessageReceived() : the notifications are disabled");
+                Log.d(LOG_TAG, "## onMessageReceivedInternal() : the notifications are disabled");
                 return;
             }
 
             if (!gcmManager.isBackgroundSyncAllowed() && VectorApp.isAppInBackground()) {
-                Log.d(LOG_TAG, "## onMessageReceived() : the background sync is disabled");
+                Log.d(LOG_TAG, "## onMessageReceivedInternal() : the background sync is disabled");
 
                 EventStreamService eventStreamService = EventStreamService.getInstance();
 
                 if (null != eventStreamService) {
-                    Event event = parseEvent(data);
-
-                    if (null != event) {
-                        // TODO the session id should be provided by the server
-                        MXSession session = Matrix.getInstance(getApplicationContext()).getDefaultSession();
-                        RoomState roomState = null;
-
-                        if (null != session) {
-                            try {
-                                roomState = session.getDataHandler().getRoom(event.roomId).getLiveState();
-                            } catch (Exception e) {
-                                Log.e(LOG_TAG, "Fail to retrieve the roomState of " + event.roomId);
-                            }
-
-                            if (TextUtils.equals(event.getType(), Event.EVENT_TYPE_MESSAGE_ENCRYPTED) && session.isCryptoEnabled()) {
-                                session.getCrypto().decryptEvent(event, null);
-                            }
-
-                            eventStreamService.prepareNotification(event, roomState, session.getDataHandler().getBingRulesManager().fulfilledBingRule(event));
-                            eventStreamService.refreshMessagesNotification();
-                        }
-
-                        Log.d(LOG_TAG, "## onMessageReceived() : trigger a notification");
-                    } else {
-                        Log.d(LOG_TAG, "## onMessageReceived() : fail to parse the notification data");
-                    }
-
+                    eventStreamService.onNotifiedEventWithBackgroundSyncDisabled(parseEvent(data), data.get("room_name"), data.get("sender_display_name"), unreadCount);
                 } else {
-                    Log.d(LOG_TAG, "## onMessageReceived() : there is no event service so nothing is done");
+                    Log.d(LOG_TAG, "## onMessageReceivedInternal() : there is no event service so nothing is done");
                 }
 
                 return;
@@ -153,6 +132,27 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
             if (!mCheckLaunched && (null != Matrix.getInstance(getApplicationContext()).getDefaultSession())) {
                 CommonActivityUtils.startEventStreamService(MatrixGcmListenerService.this);
                 mCheckLaunched = true;
+            }
+
+            // check if the event was not yet received
+            // a previous catchup might have already retrieved the notified event
+            if ((null != eventId) && (null != roomId)) {
+                try {
+                    Collection<MXSession> sessions = Matrix.getInstance(getApplicationContext()).getSessions();
+
+                    if ((null != sessions) && (sessions.size() > 0)) {
+                        for (MXSession session : sessions) {
+                            if (session.getDataHandler().getStore().isReady()) {
+                                if (null != session.getDataHandler().getStore().getEvent(eventId, roomId)) {
+                                    Log.e(LOG_TAG, "## onMessageReceivedInternal() : ignore the event " + eventId + " in room " + roomId + "because it is already known");
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(LOG_TAG, "## onMessageReceivedInternal() : failed to check if the event was already defined " + e.getMessage());
+                }
             }
 
             CommonActivityUtils.catchupEventStream(MatrixGcmListenerService.this);
@@ -170,23 +170,15 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
     public void onMessageReceived(RemoteMessage message) {
         final Map<String, String> data = message.getData();
 
-        Log.d(LOG_TAG, "## onMessageReceived() --------------------------------");
-
         if (null == mUIHandler) {
             mUIHandler = new android.os.Handler(VectorApp.getInstance().getMainLooper());
         }
 
-        // prefer running in the UI thread
-        if (null != mUIHandler) {
-            mUIHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    onMessageReceivedInternal(data);
-                }
-            });
-        } else {
-            Log.d(LOG_TAG, "## onMessageReceived() : failed to retrieve the UI thread");
-            onMessageReceivedInternal(data);
-        }
+        mUIHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                onMessageReceivedInternal(data);
+            }
+        });  onMessageReceivedInternal(data);
     }
 }
