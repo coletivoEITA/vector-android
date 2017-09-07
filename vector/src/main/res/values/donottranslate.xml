@@ -5,7 +5,7 @@
     <!-- server urls -->
     <string name="vector_im_server_url" translatable="false">https://vector.im</string>
     <string name="matrix_org_server_url" translatable="false">https://matrix.org</string>
-    <string name="default_hs_server_url" translatable="false">https://riot.rios.org.br</string>
+    <string name="default_hs_server_url" translatable="false">https://chat.rios.org.br</string>
     <string name="default_identity_server_url" translatable="false">https://vector.im</string>
 
     <!--string name="settings_room_privacy_label">Privacy</string-->
