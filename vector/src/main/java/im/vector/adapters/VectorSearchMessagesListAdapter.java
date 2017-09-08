@@ -17,17 +17,13 @@
 package im.vector.adapters;
 
 import android.content.Context;
+import android.support.v4.content.ContextCompat;
 import android.text.SpannableString;
 import android.text.TextUtils;
-import android.text.style.BackgroundColorSpan;
-import android.text.style.CharacterStyle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
-
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
 
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.adapters.MessageRow;
@@ -35,7 +31,6 @@ import org.matrix.androidsdk.data.Room;
 import org.matrix.androidsdk.data.RoomState;
 import org.matrix.androidsdk.db.MXMediasCache;
 import org.matrix.androidsdk.rest.model.Event;
-import org.matrix.androidsdk.rest.model.RoomMember;
 import org.matrix.androidsdk.util.EventDisplay;
 
 import im.vector.R;
@@ -55,14 +50,17 @@ public class VectorSearchMessagesListAdapter extends VectorMessagesAdapter {
                 R.layout.adapter_item_vector_search_message_text_emote_notice,
                 R.layout.adapter_item_vector_search_message_image_video,
                 R.layout.adapter_item_vector_search_message_text_emote_notice,
+                R.layout.adapter_item_vector_search_message_room_member,
                 R.layout.adapter_item_vector_search_message_text_emote_notice,
                 R.layout.adapter_item_vector_search_message_file,
                 R.layout.adapter_item_vector_search_message_image_video,
+                -1,
+                R.layout.adapter_item_vector_search_message_emoji,
                 mediasCache);
 
         setNotifyOnChange(true);
         mDisplayRoomName = displayRoomName;
-        mSearchHighlightMessageTextColor = context.getResources().getColor(R.color.vector_green_color);
+        mSearchHighlightMessageTextColor = ContextCompat.getColor(context, R.color.vector_green_color);
     }
 
     /**
@@ -73,18 +71,15 @@ public class VectorSearchMessagesListAdapter extends VectorMessagesAdapter {
         mPattern = pattern;
     }
 
-    /**
-     * Highlight text style
-     */
-    protected CharacterStyle getHighLightTextStyle() {
-        return new BackgroundColorSpan(mSearchHighlightMessageTextColor);
-    }
-
     @Override
     protected boolean mergeView(Event event, int position, boolean shouldBeMerged) {
         return false;
     }
 
+    @Override
+    protected boolean supportMessageRowMerge(MessageRow row) {
+        return false;
+    }
 
     @Override
     public View getView(int position, View convertView2, ViewGroup parent) {
@@ -108,36 +103,19 @@ public class VectorSearchMessagesListAdapter extends VectorMessagesAdapter {
             roomState = room.getLiveState();
         }
 
-        RoomMember sender = null;
-
-        if (null != roomState) {
-            sender = roomState.getMember(event.getSender());
-        }
 
         // refresh the avatar
-        ImageView avatarView = (ImageView) convertView.findViewById(org.matrix.androidsdk.R.id.messagesAdapter_roundAvatar_left).findViewById(R.id.avatar_img);
-        String url = null;
-        // Check whether this avatar url is updated by the current event (This happens in case of new joined member)
-        JsonObject msgContent = event.getContentAsJsonObject();
-
-        if (msgContent.has("avatar_url")) {
-            url = msgContent.get("avatar_url") == JsonNull.INSTANCE ? null : msgContent.get("avatar_url").getAsString();
-        }
-
-        String displayName = null;
-        //
-        if (msgContent.has("displayname")) {
-            displayName = msgContent.get("displayname") == JsonNull.INSTANCE ? null : msgContent.get("displayname").getAsString();
-        }
-
-        loadMemberAvatar(avatarView, sender, event.getSender(), displayName, url);
+        ImageView avatarView = (ImageView) convertView.findViewById(R.id.messagesAdapter_roundAvatar).findViewById(R.id.avatar_img);
+        mHelper.loadMemberAvatar(avatarView, row);
 
         // display the sender
-        TextView senderTextView = (TextView) convertView.findViewById(org.matrix.androidsdk.R.id.messagesAdapter_sender);
-        senderTextView.setText(getUserDisplayName(event.getSender(), roomState));
+        TextView senderTextView = (TextView) convertView.findViewById(R.id.messagesAdapter_sender);
+        if (senderTextView != null) {
+            senderTextView.setText(VectorMessagesAdapterHelper.getUserDisplayName(event.getSender(), roomState));
+        }
 
         // display the body
-        TextView bodyTextView = (TextView) convertView.findViewById(org.matrix.androidsdk.R.id.messagesAdapter_body);
+        TextView bodyTextView = (TextView) convertView.findViewById(R.id.messagesAdapter_body);
         // set the message text
         EventDisplay display = new EventDisplay(mContext, event, (null != room) ? room.getLiveState() : null);
         CharSequence text = display.getTextualDisplay();
@@ -156,7 +134,7 @@ public class VectorSearchMessagesListAdapter extends VectorMessagesAdapter {
         }
 
         // display timestamp
-        TextView timeTextView = (TextView) convertView.findViewById(org.matrix.androidsdk.R.id.messagesAdapter_timestamp);
+        TextView timeTextView = (TextView) convertView.findViewById(R.id.messagesAdapter_timestamp);
         timeTextView.setText(AdapterUtils.tsToString(mContext, event.getOriginServerTs(), true));
 
         // display the room name
@@ -190,12 +168,12 @@ public class VectorSearchMessagesListAdapter extends VectorMessagesAdapter {
         convertView.findViewById(R.id.messagesAdapter_search_separator_line).setVisibility(!TextUtils.isEmpty(headerMessage(position + 1)) ? View.GONE : View.VISIBLE);
 
         final int fPosition = position;
-        
+
         convertView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (null != mMessagesAdapterEventsListener) {
-                    mMessagesAdapterEventsListener.onContentClick(fPosition);
+                if (null != mVectorMessagesAdapterEventsListener) {
+                    mVectorMessagesAdapterEventsListener.onContentClick(fPosition);
                 }
             }
         });
@@ -204,8 +182,8 @@ public class VectorSearchMessagesListAdapter extends VectorMessagesAdapter {
         convertView.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
-                if (null != mMessagesAdapterEventsListener) {
-                    return mMessagesAdapterEventsListener.onContentLongClick(fPosition);
+                if (null != mVectorMessagesAdapterEventsListener) {
+                    return mVectorMessagesAdapterEventsListener.onContentLongClick(fPosition);
                 }
 
                 return false;

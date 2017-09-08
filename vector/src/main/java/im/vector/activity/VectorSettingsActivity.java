@@ -1,12 +1,12 @@
-/* 
+/*
  * Copyright 2016 OpenMarket Ltd
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,14 +15,13 @@
  */
 package im.vector.activity;
 
-import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.view.MenuItem;
 
 import org.matrix.androidsdk.MXSession;
-import org.matrix.androidsdk.util.Log;
 
 import im.vector.Matrix;
 import im.vector.R;
@@ -43,6 +42,9 @@ public class VectorSettingsActivity extends MXCActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // required to have the right translated title
+        setTitle(R.string.title_activity_settings);
+
         Intent intent = getIntent();
         mSession = getSession(this, intent);
 
@@ -60,6 +62,16 @@ public class VectorSettingsActivity extends MXCActionBarActivity {
         // display the fragment
         mFragment = VectorSettingsPreferencesFragment.newInstance(mSession.getMyUserId());
         getFragmentManager().beginTransaction().replace(R.id.vector_settings_page, mFragment).commit();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                finish();
+                return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override

@@ -32,6 +32,7 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.BitmapDrawable;
+import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaActionSound;
 import android.media.MediaPlayer;
@@ -41,21 +42,12 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.os.Build;
 import android.os.Bundle;
-
-import im.vector.R;
-import im.vector.VectorApp;
-import im.vector.util.ResourceUtils;
-import im.vector.view.RecentMediaLayout;
-import im.vector.view.VideoRecordView;
-
-import android.hardware.Camera;
 import android.os.HandlerThread;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
-import org.matrix.androidsdk.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
@@ -69,6 +61,7 @@ import android.widget.Toast;
 import android.widget.VideoView;
 
 import org.matrix.androidsdk.util.ImageUtils;
+import org.matrix.androidsdk.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -89,6 +82,12 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.EGLContext;
 import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.egl.EGLSurface;
+
+import im.vector.R;
+import im.vector.VectorApp;
+import im.vector.util.ResourceUtils;
+import im.vector.view.RecentMediaLayout;
+import im.vector.view.VideoRecordView;
 
 /**
  * VectorMediasPickerActivity is used to take a photo or to send an old one.
@@ -221,6 +220,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_vector_medias_picker);
 
         if (CommonActivityUtils.shouldRestartApp(this)) {
@@ -522,12 +522,14 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
     private void onSwitchCamera() {
         // can only switch if the device has more than two camera
         if (Camera.getNumberOfCameras() >= 2) {
-
-            // stop camera
-            if (null != mCameraTextureView) {
-                mCamera.stopPreview();
+            // reported by GA
+            if (null != mCamera) {
+                // stop camera
+                if (null != mCameraTextureView) {
+                    mCamera.stopPreview();
+                }
+                mCamera.release();
             }
-            mCamera.release();
             mCamera = null;
 
             if (mCameraId == Camera.CameraInfo.CAMERA_FACING_BACK) {
@@ -562,128 +564,140 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
      * Define the camera rotation (preview and recording).
      */
     private void initCameraSettings() {
-        android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
-        android.hardware.Camera.getCameraInfo(mCameraId, info);
+        try {
+            android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
+            android.hardware.Camera.getCameraInfo(mCameraId, info);
 
-        int rotation = this.getWindowManager().getDefaultDisplay().getRotation();
-        int degrees = 0;
-        switch (rotation) {
-            case Surface.ROTATION_0: degrees = 0; break; // portrait
-            case Surface.ROTATION_90: degrees = 90; break; // landscape
-            case Surface.ROTATION_180: degrees = 180; break;
-            case Surface.ROTATION_270: degrees = 270; break; // landscape
-        }
+            int rotation = this.getWindowManager().getDefaultDisplay().getRotation();
+            int degrees = 0;
+            switch (rotation) {
+                case Surface.ROTATION_0:
+                    degrees = 0;
+                    break; // portrait
+                case Surface.ROTATION_90:
+                    degrees = 90;
+                    break; // landscape
+                case Surface.ROTATION_180:
+                    degrees = 180;
+                    break;
+                case Surface.ROTATION_270:
+                    degrees = 270;
+                    break; // landscape
+            }
 
-        int previewRotation;
-        int imageRotation;
+            int previewRotation;
+            int imageRotation;
 
-        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            imageRotation = previewRotation = (info.orientation + degrees) % 360;
-            previewRotation = (360 - previewRotation) % 360;  // compensate the mirror
-        } else {  // back-facing
-            imageRotation = previewRotation = (info.orientation - degrees + 360) % 360;
-        }
+            if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                imageRotation = previewRotation = (info.orientation + degrees) % 360;
+                previewRotation = (360 - previewRotation) % 360;  // compensate the mirror
+            } else {  // back-facing
+                imageRotation = previewRotation = (info.orientation - degrees + 360) % 360;
+            }
 
-        mCameraOrientation = previewRotation;
-        mCamera.setDisplayOrientation(previewRotation);
+            mCameraOrientation = previewRotation;
+            mCamera.setDisplayOrientation(previewRotation);
 
-        Camera.Parameters params = mCamera.getParameters();
+            Camera.Parameters params = mCamera.getParameters();
 
-        // apply the rotation
-        params.setRotation(imageRotation);
+            // apply the rotation
+            params.setRotation(imageRotation);
 
-        if (!mIsVideoMode) {
-            // set the best quality
-            List<Camera.Size> supportedSizes = params.getSupportedPictureSizes();
-            if (supportedSizes.size() > 0) {
+            if (!mIsVideoMode) {
+                // set the best quality
+                List<Camera.Size> supportedSizes = params.getSupportedPictureSizes();
+                if (supportedSizes.size() > 0) {
 
-                // search the highest image quality
-                // they are not always sorted in the same order (sometimes it is asc sort ..)
-                Camera.Size maxSizePicture = supportedSizes.get(0);
-                long mult = maxSizePicture.width * maxSizePicture.height;
+                    // search the highest image quality
+                    // they are not always sorted in the same order (sometimes it is asc sort ..)
+                    Camera.Size maxSizePicture = supportedSizes.get(0);
+                    long mult = maxSizePicture.width * maxSizePicture.height;
 
-                for (int i = 1; i < supportedSizes.size(); i++) {
-                    Camera.Size curSizePicture = supportedSizes.get(i);
-                    long curMult = curSizePicture.width * curSizePicture.height;
+                    for (int i = 1; i < supportedSizes.size(); i++) {
+                        Camera.Size curSizePicture = supportedSizes.get(i);
+                        long curMult = curSizePicture.width * curSizePicture.height;
 
-                    if (curMult > mult) {
-                        mult = curMult;
-                        maxSizePicture = curSizePicture;
+                        if (curMult > mult) {
+                            mult = curMult;
+                            maxSizePicture = curSizePicture;
+                        }
                     }
+
+                    // and use it.
+                    params.setPictureSize(maxSizePicture.width, maxSizePicture.height);
                 }
-
-                // and use it.
-                params.setPictureSize(maxSizePicture.width, maxSizePicture.height);
-            }
-
-            try {
-                mCamera.setParameters(params);
-            } catch (Exception e) {
-                Log.e(LOG_TAG, "## initCameraSettings(): set size fails EXCEPTION Msg=" + e.getMessage());
-            }
-        }
-
-        // set the preview size to have the same aspect ratio than the picture size
-        List<Camera.Size> supportedPreviewSizes = params.getSupportedPreviewSizes();
-
-        if (supportedPreviewSizes.size() > 0) {
-            int cameraAR;
-
-            if (mIsVideoMode) {
-                mCamcorderProfile = getCamcorderProfile(mCameraId);
-                cameraAR = mCamcorderProfile.videoFrameWidth * 100 / mCamcorderProfile.videoFrameHeight;
-
-            } else {
-                Camera.Size picturesSize =  params.getPictureSize();
-                cameraAR = picturesSize.width * 100 / picturesSize.height;
-            }
-
-            Camera.Size bestPreviewSize = null;
-            int resolution = 0;
-
-            for(Camera.Size previewSize : supportedPreviewSizes) {
-                int previewAR = previewSize.width * 100 / previewSize.height;
-
-                if (previewAR == cameraAR) {
-                    int mult = previewSize.height * previewSize.width;
-                    if (mult > resolution) {
-                        bestPreviewSize = previewSize;
-                        resolution = mult;
-                    }
-                }
-            }
-
-            if (null != bestPreviewSize) {
-                params.setPreviewSize(bestPreviewSize.width, bestPreviewSize.height);
 
                 try {
                     mCamera.setParameters(params);
                 } catch (Exception e) {
-                    Log.e(LOG_TAG, "## initCameraSettings(): set preview size fails EXCEPTION Msg=" + e.getMessage());
+                    Log.e(LOG_TAG, "## initCameraSettings(): set size fails EXCEPTION Msg=" + e.getMessage());
                 }
             }
-        }
 
-        if (!mIsVideoMode) {
-            // set auto focus
-            try {
-                params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
-                mCamera.setParameters(params);
-            } catch (Exception e) {
-                Log.e(LOG_TAG, "## initCameraSettings(): set auto focus fails EXCEPTION Msg=" + e.getMessage());
+            // set the preview size to have the same aspect ratio than the picture size
+            List<Camera.Size> supportedPreviewSizes = params.getSupportedPreviewSizes();
+
+            if (supportedPreviewSizes.size() > 0) {
+                int cameraAR;
+
+                if (mIsVideoMode) {
+                    mCamcorderProfile = getCamcorderProfile(mCameraId);
+                    cameraAR = mCamcorderProfile.videoFrameWidth * 100 / mCamcorderProfile.videoFrameHeight;
+
+                } else {
+                    Camera.Size picturesSize = params.getPictureSize();
+                    cameraAR = picturesSize.width * 100 / picturesSize.height;
+                }
+
+                Camera.Size bestPreviewSize = null;
+                int resolution = 0;
+
+                for (Camera.Size previewSize : supportedPreviewSizes) {
+                    int previewAR = previewSize.width * 100 / previewSize.height;
+
+                    if (previewAR == cameraAR) {
+                        int mult = previewSize.height * previewSize.width;
+                        if (mult > resolution) {
+                            bestPreviewSize = previewSize;
+                            resolution = mult;
+                        }
+                    }
+                }
+
+                if (null != bestPreviewSize) {
+                    params.setPreviewSize(bestPreviewSize.width, bestPreviewSize.height);
+
+                    try {
+                        mCamera.setParameters(params);
+                    } catch (Exception e) {
+                        Log.e(LOG_TAG, "## initCameraSettings(): set preview size fails EXCEPTION Msg=" + e.getMessage());
+                    }
+                }
             }
 
-            // set jpeg quality
-            try {
-                params.setPictureFormat(ImageFormat.JPEG);
-                params.setJpegQuality(JPEG_QUALITY_MAX);
-                mCamera.setParameters(params);
-            } catch (Exception e) {
-                Log.e(LOG_TAG, "## initCameraSettings(): set jpeg quality fails EXCEPTION Msg=" + e.getMessage());
-            }
-        }
+            if (!mIsVideoMode) {
+                // set auto focus
+                try {
+                    params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+                    mCamera.setParameters(params);
+                } catch (Exception e) {
+                    Log.e(LOG_TAG, "## initCameraSettings(): set auto focus fails EXCEPTION Msg=" + e.getMessage());
+                }
 
-        resizeCameraPreviewTexture();
+                // set jpeg quality
+                try {
+                    params.setPictureFormat(ImageFormat.JPEG);
+                    params.setJpegQuality(JPEG_QUALITY_MAX);
+                    mCamera.setParameters(params);
+                } catch (Exception e) {
+                    Log.e(LOG_TAG, "## initCameraSettings(): set jpeg quality fails EXCEPTION Msg=" + e.getMessage());
+                }
+            }
+
+            resizeCameraPreviewTexture();
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "## ## initCameraSettings(): failed " + e.getMessage());
+        }
     }
 
 
@@ -1402,44 +1416,48 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         Log.d(LOG_TAG, "## onSurfaceTextureSizeChanged(): width="+width+" height="+height);
 
         if (null != surface) {
-            // clear the texture to avoid staled area
-            // when switching the camera, some texture areas are not refreshed/cleared
-            // so, paint it in black
-            EGL10 egl = (EGL10) EGLContext.getEGL();
-            EGLDisplay display = egl.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY);
-            egl.eglInitialize(display, null);
+            try {
+                // clear the texture to avoid staled area
+                // when switching the camera, some texture areas are not refreshed/cleared
+                // so, paint it in black
+                EGL10 egl = (EGL10) EGLContext.getEGL();
+                EGLDisplay display = egl.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY);
+                egl.eglInitialize(display, null);
 
-            int[] attribList = {
-                    EGL10.EGL_RED_SIZE, 8,
-                    EGL10.EGL_GREEN_SIZE, 8,
-                    EGL10.EGL_BLUE_SIZE, 8,
-                    EGL10.EGL_ALPHA_SIZE, 8,
-                    EGL10.EGL_RENDERABLE_TYPE, EGL10.EGL_WINDOW_BIT,
-                    EGL10.EGL_NONE, 0,
-                    EGL10.EGL_NONE
-            };
-            EGLConfig[] configs = new EGLConfig[1];
-            int[] numConfigs = new int[1];
-            egl.eglChooseConfig(display, attribList, configs, configs.length, numConfigs);
-            EGLConfig config = configs[0];
-            EGLContext context = egl.eglCreateContext(display, config, EGL10.EGL_NO_CONTEXT, new int[]{
-                    12440, 2,
-                    EGL10.EGL_NONE
-            });
-            EGLSurface eglSurface = egl.eglCreateWindowSurface(display, config, surface,
-                    new int[]{
-                            EGL10.EGL_NONE
-                    });
+                int[] attribList = {
+                        EGL10.EGL_RED_SIZE, 8,
+                        EGL10.EGL_GREEN_SIZE, 8,
+                        EGL10.EGL_BLUE_SIZE, 8,
+                        EGL10.EGL_ALPHA_SIZE, 8,
+                        EGL10.EGL_RENDERABLE_TYPE, EGL10.EGL_WINDOW_BIT,
+                        EGL10.EGL_NONE, 0,
+                        EGL10.EGL_NONE
+                };
+                EGLConfig[] configs = new EGLConfig[1];
+                int[] numConfigs = new int[1];
+                egl.eglChooseConfig(display, attribList, configs, configs.length, numConfigs);
+                EGLConfig config = configs[0];
+                EGLContext context = egl.eglCreateContext(display, config, EGL10.EGL_NO_CONTEXT, new int[]{
+                        12440, 2,
+                        EGL10.EGL_NONE
+                });
+                EGLSurface eglSurface = egl.eglCreateWindowSurface(display, config, surface,
+                        new int[]{
+                                EGL10.EGL_NONE
+                        });
 
-            egl.eglMakeCurrent(display, eglSurface, eglSurface, context);
-            GLES20.glClearColor(0, 0, 0, 1);
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-            egl.eglSwapBuffers(display, eglSurface);
-            egl.eglDestroySurface(display, eglSurface);
-            egl.eglMakeCurrent(display, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE,
-                    EGL10.EGL_NO_CONTEXT);
-            egl.eglDestroyContext(display, context);
-            egl.eglTerminate(display);
+                egl.eglMakeCurrent(display, eglSurface, eglSurface, context);
+                GLES20.glClearColor(0, 0, 0, 1);
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+                egl.eglSwapBuffers(display, eglSurface);
+                egl.eglDestroySurface(display, eglSurface);
+                egl.eglMakeCurrent(display, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE,
+                        EGL10.EGL_NO_CONTEXT);
+                egl.eglDestroyContext(display, context);
+                egl.eglTerminate(display);
+            } catch (Exception e) {
+                Log.e(LOG_TAG, "## onSurfaceTextureSizeChanged() failed " + e.getMessage());
+            }
         }
     }
 

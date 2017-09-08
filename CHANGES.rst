@@ -1,4 +1,73 @@
-Changes in Riot 0.6.13 (2017-06-12)
+Changes in Riot 0.7.01 (2017-09-04)
+===================================================
+
+Features:
+ * Add dark theme.
+ * Add the 12/24 hours settings.
+ 
+Improvements:
+ * [Fdroid] Improve the sync when the application is backgrounded.
+ * Update the call notification priority to be displayed on the lock screen.
+ * Use the default incoming ring tone if the storage permission was not granted.
+ 
+Bugfixes:
+ * Fix many issues reported by Google analytics.
+ * Fix e2e export silent failure when the storage permission was not granted.
+ * Fix crashes when too many asynctasks were launched.
+ * Fix the notification sounds.
+ * Restore the video call video when the application is put in background and in foreground.
+ * Fix the audio call resuming	
+ * Fix the broken incoming video call	
+ * #1467 : Rotating the device while an image is uploading inserts the image twice.
+ * #1475 : messages composed with only one number are displayed as if they were emojis 
+ * #1503 : Do not enlarge non-emoji.
+ * #1510 : Rotating the device while the camera activity is running closes it 
+ * #1514 : 'Enable background sync' is viewable on fdroid build preference does not have an effect
+ * #1532 : [custom hs] high battery draining issue 
+ * #1537 : cannot update the profile image
+ * #1548 : Unable to decrypt: encryption not enabled 
+ * #1554 : Turn screen on for 3 seconds not working
+ 
+Changes in Riot 0.7.00 (2017-08-01)
+===================================================
+
+Features:
+ * Add member events merge.
+ * Add new UI settings (hide/show some UI items, change the text size).
+ * Add a beta data save mode.
+ * Add a medias timelife i.e the medias are kept in storage for a specfied period.
+ * Add new user search.
+ 
+Improvements:
+ * Add more languages.
+ * Reduce the storage use.
+  
+Bugfixes:
+ * Fix many crashes reported by rageshake or GA.
+ * #1455 : Click on a matrix id does not open the member details activity if it is not a known user.
+
+Changes in Riot 0.6.14 (2017-07-25)
+===================================================
+
+Bugfixes:
+ * Remove server catchup patch (i.e the sync requests were triggered until getting something). It used to drain battery on small accounts.
+ * Fix application resume edge cases (fdroid only)
+
+Changes in Riot 0.6.13 (2017-07-03)
+===================================================
+ 
+Features:
+ * Add new home UI
+ * Add the read markers management
+   
+Bugfixes:
+ * Fix many issues reported by GA.
+ * #1308 : E2E new devices dialog disappears if screen is turned off by timeout : it does not reappear at next sent event.
+ * #1330 : Using the name completion as the first item of the message should add a colon (:)
+ * #1331 : The Events service is not properly restarted in some race conditions
+ * #1340 : sync is stuck after the application has been killed in background
+ 
+Changes in Riot 0.6.12 (2017-06-12)
 =======================================================
 
 Features:

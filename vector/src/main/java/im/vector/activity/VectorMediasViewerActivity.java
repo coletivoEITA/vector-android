@@ -21,7 +21,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.view.ViewPager;
 import android.text.TextUtils;
-import org.matrix.androidsdk.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -32,8 +31,10 @@ import com.google.gson.JsonElement;
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.db.MXMediasCache;
 import org.matrix.androidsdk.listeners.MXMediaDownloadListener;
+import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
 import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.util.JsonUtils;
+import org.matrix.androidsdk.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -42,9 +43,11 @@ import java.util.List;
 
 import im.vector.Matrix;
 import im.vector.R;
+import im.vector.VectorApp;
 import im.vector.adapters.VectorMediasViewerAdapter;
 import im.vector.db.VectorContentProvider;
 import im.vector.util.SlidableMediaInfo;
+import im.vector.util.ThemeUtils;
 
 public class VectorMediasViewerActivity extends MXCActionBarActivity {
 
@@ -187,6 +190,8 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
 
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.vector_medias_viewer, menu);
+        CommonActivityUtils.tintMenuIcons(menu, ThemeUtils.getColor(this, R.attr.icon_tint_on_dark_action_bar_color));
+
         return true;
     }
 
@@ -203,9 +208,12 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
         if (null != file) {
             // download
             if (action == R.id.ic_action_download) {
-                if (null != CommonActivityUtils.saveMediaIntoDownloads(this, file, mediaInfo.mFileName, mediaInfo.mMimeType)) {
-                    Toast.makeText(this, getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
-                }
+                CommonActivityUtils.saveMediaIntoDownloads(this, file, mediaInfo.mFileName, mediaInfo.mMimeType, new SimpleApiCallback<String>() {
+                    @Override
+                    public void onSuccess(String string) {
+                        Toast.makeText(VectorApp.getInstance(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
+                    }
+                });
             } else {
                 // shared
                 Uri mediaUri = null;
@@ -277,12 +285,14 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
 
-        if (id == R.id.ic_action_share) {
-            onAction(mViewPager.getCurrentItem(), id);
-            return true;
-        } else if (id ==  R.id.ic_action_download) {
-            onAction(mViewPager.getCurrentItem(), id);
-            return true;
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                finish();
+                return true;
+            case R.id.ic_action_share:
+            case R.id.ic_action_download:
+                onAction(mViewPager.getCurrentItem(), id);
+                return true;
         }
 
         return super.onOptionsItemSelected(item);

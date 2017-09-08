@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 OpenMarket Ltd
  * Copyright 2017 Vector Creations Ltd
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,19 +19,24 @@ package im.vector;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
+import android.util.Pair;
 
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.util.Log;
@@ -41,21 +46,33 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import im.vector.activity.CommonActivityUtils;
 import im.vector.activity.VectorCallViewActivity;
+import im.vector.activity.VectorMediasPickerActivity;
 import im.vector.contacts.ContactsManager;
 import im.vector.contacts.PIDsRetriever;
 import im.vector.ga.GAHelper;
 import im.vector.gcm.GcmRegistrationManager;
 import im.vector.receiver.HeadsetConnectionReceiver;
 import im.vector.services.EventStreamService;
+import im.vector.util.BugReporter;
+import im.vector.util.PhoneNumberUtils;
+import im.vector.util.PreferencesManager;
 import im.vector.util.RageShake;
+import im.vector.util.ThemeUtils;
 import im.vector.util.VectorCallSoundManager;
 import im.vector.util.VectorMarkdownParser;
 
@@ -100,8 +117,8 @@ public class VectorApp extends Application {
      * Google analytics information.
      */
     public static int VERSION_BUILD = -1;
-    public static String VECTOR_VERSION_STRING = "";
-    public static String SDK_VERSION_STRING = "";
+    private static String VECTOR_VERSION_STRING = "";
+    private static String SDK_VERSION_STRING = "";
 
     /**
      * Tells if there a pending call whereas the application is backgrounded.
@@ -130,6 +147,26 @@ public class VectorApp extends Application {
      */
     public static File mLogsDirectoryFile = null;
 
+    /**
+     * The last time that removeMediasBefore has been called.
+     */
+    private long mLastMediasCheck = 0;
+
+    private BroadcastReceiver mLanguageReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!TextUtils.equals(Locale.getDefault().toString(), getApplicationLocale().toString())) {
+                Log.d(LOG_TAG, "## onReceive() : the locale has been updated to " + Locale.getDefault().toString() + ", restore the expected value " + getApplicationLocale().toString());
+                updateApplicationSettings(getApplicationLocale(), getFontScale(), ThemeUtils.getApplicationTheme(context));
+
+                if (null != getCurrentActivity()) {
+                    getCurrentActivity().startActivity(getCurrentActivity().getIntent());
+                    getCurrentActivity().finish();
+                }
+            }
+        }
+    };
+
     @Override
     public void onCreate() {
         Log.d(LOG_TAG, "onCreate");
@@ -142,8 +179,7 @@ public class VectorApp extends Application {
         try {
             PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
             VERSION_BUILD = packageInfo.versionCode;
-        }
-        catch (PackageManager.NameNotFoundException e) {
+        } catch (PackageManager.NameNotFoundException e) {
             Log.e(LOG_TAG, "fails to retrieve the package info " + e.getMessage());
         }
 
@@ -180,10 +216,13 @@ public class VectorApp extends Application {
         MXSession.initUserAgent(getApplicationContext());
 
         this.registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+            Map<String, String> mLocalesByActivity = new HashMap<>();
+
             @Override
             public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
                 Log.d(LOG_TAG, "onActivityCreated " + activity);
                 mCreatedActivities.add(activity.toString());
+                ThemeUtils.setActivityTheme(activity);
             }
 
             @Override
@@ -191,15 +230,57 @@ public class VectorApp extends Application {
                 Log.d(LOG_TAG, "onActivityStarted " + activity);
             }
 
+            /**
+             * Compute the locale status value
+             * @param activity the activity
+             * @return the local status value
+             */
+            private String getActivityLocaleStatus(Activity activity) {
+                return getApplicationLocale().toString() + "_" + getFontScale() + "_" + ThemeUtils.getApplicationTheme(activity);
+            }
+
+            /**
+             * Restart an activity to manage language update
+             * @param activity the activity to restart
+             */
+            private void restartActivity(Activity activity) {
+                // avoid restarting activities when it is not required
+                // some of them has no text
+                if (!(activity instanceof VectorMediasPickerActivity) && !(activity instanceof VectorCallViewActivity)) {
+                    activity.startActivity(activity.getIntent());
+                    activity.finish();
+                }
+            }
+
             @Override
-            public void onActivityResumed(Activity activity) {
+            public void onActivityResumed(final Activity activity) {
                 Log.d(LOG_TAG, "onActivityResumed " + activity);
                 setCurrentActivity(activity);
+
+                String activityKey = activity.toString();
+
+                if (mLocalesByActivity.containsKey(activityKey)) {
+                    String prevActivityLocale = mLocalesByActivity.get(activityKey);
+
+                    if (!TextUtils.equals(prevActivityLocale, getActivityLocaleStatus(activity))) {
+                        Log.d(LOG_TAG, "## onActivityResumed() : restart the activity " + activity + " because of the locale update from " + prevActivityLocale + " to " + getActivityLocaleStatus(activity));
+                        restartActivity(activity);
+                        return;
+                    }
+                }
+
+                // it should never happen as there is a broadcast receiver (mLanguageReceiver)
+                if (!TextUtils.equals(Locale.getDefault().toString(), getApplicationLocale().toString())) {
+                    Log.d(LOG_TAG, "## onActivityResumed() : the locale has been updated to " + Locale.getDefault().toString() + ", restore the expected value " + getApplicationLocale().toString());
+                    updateApplicationSettings(getApplicationLocale(), getFontScale(), ThemeUtils.getApplicationTheme(activity));
+                    restartActivity(activity);
+                }
             }
 
             @Override
             public void onActivityPaused(Activity activity) {
                 Log.d(LOG_TAG, "onActivityPaused " + activity);
+                mLocalesByActivity.put(activity.toString(), getActivityLocaleStatus(activity));
                 setCurrentActivity(null);
             }
 
@@ -217,6 +298,7 @@ public class VectorApp extends Application {
             public void onActivityDestroyed(Activity activity) {
                 Log.d(LOG_TAG, "onActivityDestroyed " + activity);
                 mCreatedActivities.remove(activity.toString());
+                mLocalesByActivity.remove(activity.toString());
 
                 if (mCreatedActivities.size() > 1) {
                     Log.d(LOG_TAG, "onActivityDestroyed : \n" + mCreatedActivities);
@@ -234,11 +316,21 @@ public class VectorApp extends Application {
             // reported by GA
             Log.e(LOG_TAG, "cannot create the mMarkdownParser " + e.getMessage());
         }
+
+        // track external language updates
+        // local update from the settings
+        // or screen rotation !
+        VectorApp.getInstance().registerReceiver(mLanguageReceiver, new IntentFilter(Intent.ACTION_LOCALE_CHANGED));
+        VectorApp.getInstance().registerReceiver(mLanguageReceiver, new IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED));
+
+        PreferencesManager.fixMigrationIssues(this);
+        initApplicationLocale();
     }
 
     /**
      * Parse a markdown text
-     * @param text the text to parse
+     *
+     * @param text     the text to parse
      * @param listener the result listener
      */
     public static void markdownToHtml(final String text, final VectorMarkdownParser.IVectorMarkdownParserListener listener) {
@@ -272,14 +364,25 @@ public class VectorApp extends Application {
         // the sessions are not anymore seen as "online"
         ArrayList<MXSession> sessions = Matrix.getInstance(this).getSessions();
 
-        for(MXSession session : sessions) {
+        for (MXSession session : sessions) {
             if (session.isAlive()) {
                 session.setIsOnline(false);
-                session.setSyncDelay(gcmRegistrationManager.getBackgroundSyncDelay());
+                session.setSyncDelay(gcmRegistrationManager.isBackgroundSyncAllowed() ? gcmRegistrationManager.getBackgroundSyncDelay() : 0);
                 session.setSyncTimeout(gcmRegistrationManager.getBackgroundSyncTimeOut());
-                removeSyncingSession(session);
+
+                // remove older medias
+                if ((System.currentTimeMillis() - mLastMediasCheck) < (24 * 60 * 60 * 1000)) {
+                    mLastMediasCheck = System.currentTimeMillis();
+                    session.removeMediasBefore(VectorApp.this, PreferencesManager.getMinMediasLastAccessTime(getApplicationContext()));
+                }
+
+                if (session.getDataHandler().areLeftRoomsSynced()) {
+                    session.getDataHandler().releaseLeftRooms();
+                }
             }
         }
+
+        clearSyncingSessions();
 
         PIDsRetriever.getInstance().onAppBackgrounded();
 
@@ -297,14 +400,19 @@ public class VectorApp extends Application {
         mActivityTransitionTimerTask = new TimerTask() {
             @Override
             public void run() {
-                if (mActivityTransitionTimerTask != null) {
-                    mActivityTransitionTimerTask.cancel();
-                    mActivityTransitionTimerTask = null;
-                }
+                // reported by GA
+                try {
+                    if (mActivityTransitionTimerTask != null) {
+                        mActivityTransitionTimerTask.cancel();
+                        mActivityTransitionTimerTask = null;
+                    }
 
-                if (mActivityTransitionTimer != null) {
-                    mActivityTransitionTimer.cancel();
-                    mActivityTransitionTimer = null;
+                    if (mActivityTransitionTimer != null) {
+                        mActivityTransitionTimer.cancel();
+                        mActivityTransitionTimer = null;
+                    }
+                } catch (Exception e) {
+                    Log.e(LOG_TAG, "## startActivityTransitionTimer() failed " + e.getMessage());
                 }
 
                 if (null != mCurrentActivity) {
@@ -369,7 +477,7 @@ public class VectorApp extends Application {
             boolean hasActiveCall = false;
 
             ArrayList<MXSession> sessions = Matrix.getInstance(this).getSessions();
-            for(MXSession session : sessions) {
+            for (MXSession session : sessions) {
                 session.getMyUser().refreshUserInfos(null);
                 session.setIsOnline(true);
                 session.setSyncDelay(0);
@@ -382,7 +490,7 @@ public class VectorApp extends Application {
             if (VectorCallSoundManager.isRinging() && !hasActiveCall && (null != EventStreamService.getInstance())) {
                 Log.e(LOG_TAG, "## suspendApp() : fix an infinite ringing");
                 EventStreamService.getInstance().hideCallNotifications();
-                
+
                 if (VectorCallSoundManager.isRinging()) {
                     VectorCallSoundManager.stopRinging();
                 }
@@ -398,13 +506,14 @@ public class VectorApp extends Application {
     /**
      * Update the current active activity.
      * It manages the application background / foreground when it is required.
+     *
      * @param activity the current activity, null if there is no more one.
      */
     private void setCurrentActivity(Activity activity) {
         Log.d(LOG_TAG, "## setCurrentActivity() : from " + mCurrentActivity + " to " + activity);
 
         if (VectorApp.isAppInBackground() && (null != activity)) {
-            Matrix matrixInstance =  Matrix.getInstance(activity.getApplicationContext());
+            Matrix matrixInstance = Matrix.getInstance(activity.getApplicationContext());
 
             // sanity check
             if (null != matrixInstance) {
@@ -433,7 +542,9 @@ public class VectorApp extends Application {
     /**
      * @return the current active activity
      */
-    public static Activity getCurrentActivity() { return mCurrentActivity; }
+    public static Activity getCurrentActivity() {
+        return mCurrentActivity;
+    }
 
     /**
      * Return true if the application is in background.
@@ -480,17 +591,19 @@ public class VectorApp extends Application {
     /**
      * The image taken from the medias picker is stored in a static variable because
      * saving it would take too much time.
+     *
      * @return the saved image from medias picker
      */
-    public static Bitmap getSavedPickerImagePreview(){
+    public static Bitmap getSavedPickerImagePreview() {
         return mSavedPickerImagePreview;
     }
 
     /**
      * Save the image taken in the medias picker
+     *
      * @param aSavedCameraImagePreview the bitmap.
      */
-    public static void setSavedCameraImagePreview(Bitmap aSavedCameraImagePreview){
+    public static void setSavedCameraImagePreview(Bitmap aSavedCameraImagePreview) {
         if (aSavedCameraImagePreview != mSavedPickerImagePreview) {
             // force to release memory
             // reported by GA
@@ -517,22 +630,22 @@ public class VectorApp extends Application {
     /**
      * syncing sessions
      */
-    private static ArrayList<MXSession> mSyncingSessions = new ArrayList<>();
+    private static final HashSet<MXSession> mSyncingSessions = new HashSet<>();
 
     /**
      * Add a session in the syncing sessions list
+     *
      * @param session the session
      */
     public static void addSyncingSession(MXSession session) {
         synchronized (mSyncingSessions) {
-            if ((null != session) && (mSyncingSessions.indexOf(session) < 0)) {
-                mSyncingSessions.add(session);
-            }
+            mSyncingSessions.add(session);
         }
     }
 
     /**
      * Remove a session in the syncing sessions list
+     *
      * @param session the session
      */
     public static void removeSyncingSession(MXSession session) {
@@ -544,7 +657,17 @@ public class VectorApp extends Application {
     }
 
     /**
+     * Clear syncing sessions list
+     */
+    public static void clearSyncingSessions() {
+        synchronized (mSyncingSessions) {
+            mSyncingSessions.clear();
+        }
+    }
+
+    /**
      * Tell if a session is syncing
+     *
      * @param session the session
      * @return true if the session is syncing
      */
@@ -553,7 +676,7 @@ public class VectorApp extends Application {
 
         if (null != session) {
             synchronized (mSyncingSessions) {
-                isSyncing = (mSyncingSessions.indexOf(session) >= 0);
+                isSyncing = mSyncingSessions.contains(session);
             }
         }
 
@@ -569,68 +692,32 @@ public class VectorApp extends Application {
     public static final String GOOGLE_ANALYTICS_STATS_CATEGORY = "stats";
 
     public static final String GOOGLE_ANALYTICS_STATS_ROOMS_ACTION = "rooms";
-    public static final String GOOGLE_ANALYTICS_STARTUP_INITIAL_SYNC_ACTION = "initialSync";
-    public static final String GOOGLE_ANALYTICS_STARTUP_INCREMENTAL_SYNC_ACTION = "incrementalSync";
     public static final String GOOGLE_ANALYTICS_STARTUP_STORE_PRELOAD_ACTION = "storePreload";
     public static final String GOOGLE_ANALYTICS_STARTUP_MOUNT_DATA_ACTION = "mountData";
     public static final String GOOGLE_ANALYTICS_STARTUP_LAUNCH_SCREEN_ACTION = "launchScreen";
     public static final String GOOGLE_ANALYTICS_STARTUP_CONTACTS_ACTION = "Contacts";
 
-    // keep track of the GA events
-    private static HashMap<String, String> mGAStatsMap = new HashMap<>();
-
     /**
      * Send a GA stats
-     * @param context the context
+     *
+     * @param context  the context
      * @param category the category
-     * @param action the action
-     * @param label the label
-     * @param value the value
+     * @param action   the action
+     * @param label    the label
+     * @param value    the value
      */
     public static void sendGAStats(Context context, String category, String action, String label, long value) {
-        try {
-            String key = "[" + category + "] " + action;
-            String mapValue = "" ;
-
-            if (!TextUtils.isEmpty(label)) {
-                mapValue += label;
-            } else {
-                mapValue += value + " ms";
-            }
-
-            mGAStatsMap.put(key, mapValue);
-        } catch (Exception e) {
-            Log.e(LOG_TAG, "## sendGAStats() failed " + e.getMessage());
-        }
-
         GAHelper.sendGAStats(context, category, action, label, value);
     }
 
     /**
-     * Provide the GA stats.
-     * @return the GA stats.
-     */
-    public static String getGAStats() {
-        String stats = "";
-
-        for(String k : mGAStatsMap.keySet()) {
-            stats += k + " : " + mGAStatsMap.get(k) + "\n";
-        }
-
-        return stats;
-    }
-
-    /**
      * An uncaught exception has been triggered
+     *
      * @param threadName the thread name
-     * @param throwable the throwable
+     * @param throwable  the throwable
      * @return the exception description
      */
     public static String uncaughtException(String threadName, Throwable throwable) {
-        if (null != VectorApp.getInstance()) {
-            VectorApp.getInstance().setAppCrashed();
-        }
-
         StringBuilder b = new StringBuilder();
         String appName = Matrix.getApplicationName();
 
@@ -673,21 +760,32 @@ public class VectorApp extends Application {
         b.append(sw.getBuffer().toString());
         Log.e("FATAL EXCEPTION", b.toString());
 
-        return b.toString();
+        String bugDescription = b.toString();
+
+        if (null != VectorApp.getInstance()) {
+            VectorApp.getInstance().setAppCrashed(bugDescription);
+        }
+
+        return bugDescription;
     }
 
     /**
      * Warn that the application crashed
+     *
+     * @param description the crash description
      */
-    private void setAppCrashed() {
+    private void setAppCrashed(String description) {
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(VectorApp.getInstance());
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean(PREFS_CRASH_KEY, true);
         editor.commit();
+
+        BugReporter.saveCrashReport(this, description);
     }
 
     /**
      * Tells if the application crashed
+     *
      * @return true if the application crashed
      */
     public boolean didAppCrash() {
@@ -706,5 +804,387 @@ public class VectorApp extends Application {
         editor.commit();
     }
 
-}
+    //==============================================================================================================
+    // Locale management
+    //==============================================================================================================
 
+    // the supported application languages
+    private static final Set<Locale> mApplicationLocales = new HashSet<>();
+
+    private static final String APPLICATION_LOCALE_COUNTRY_KEY = "APPLICATION_LOCALE_COUNTRY_KEY";
+    private static final String APPLICATION_LOCALE_VARIANT_KEY = "APPLICATION_LOCALE_VARIANT_KEY";
+    private static final String APPLICATION_LOCALE_LANGUAGE_KEY = "APPLICATION_LOCALE_LANGUAGE_KEY";
+    private static final String APPLICATION_FONT_SCALE_KEY = "APPLICATION_FONT_SCALE_KEY";
+
+    public static final String FONT_SCALE_TINY = "FONT_SCALE_TINY";
+    public static final String FONT_SCALE_SMALL = "FONT_SCALE_SMALL";
+    public static final String FONT_SCALE_NORMAL = "FONT_SCALE_NORMAL";
+    public static final String FONT_SCALE_LARGE = "FONT_SCALE_LARGE";
+    public static final String FONT_SCALE_LARGER = "FONT_SCALE_LARGER";
+    public static final String FONT_SCALE_LARGEST = "FONT_SCALE_LARGEST";
+    public static final String FONT_SCALE_HUGE = "FONT_SCALE_HUGE";
+
+    private static final Locale mApplicationDefaultLanguage = new Locale("en", "UK");
+
+    private static final Map<Float, String> mPrefKeyByFontScale = new LinkedHashMap<Float , String>() {{
+        put(0.70f, FONT_SCALE_TINY);
+        put(0.85f, FONT_SCALE_SMALL);
+        put(1.00f, FONT_SCALE_NORMAL);
+        put(1.15f, FONT_SCALE_LARGE);
+        put(1.30f, FONT_SCALE_LARGER);
+        put(1.45f, FONT_SCALE_LARGEST);
+        put(1.60f, FONT_SCALE_HUGE);
+    }};
+
+    private static final Map<String, Integer> mFontTextScaleIdByPrefKey = new LinkedHashMap<String , Integer>() {{
+        put(FONT_SCALE_TINY, R.string.tiny);
+        put(FONT_SCALE_SMALL, R.string.small);
+        put(FONT_SCALE_NORMAL, R.string.normal);
+        put(FONT_SCALE_LARGE, R.string.large);
+        put(FONT_SCALE_LARGER, R.string.larger);
+        put(FONT_SCALE_LARGEST, R.string.largest);
+        put(FONT_SCALE_HUGE, R.string.huge);
+    }};
+
+    /**
+     * Init the application locale from the saved one
+     */
+    private static void initApplicationLocale() {
+        Context context = VectorApp.getInstance();
+        Locale locale = getApplicationLocale();
+        float fontScale = getFontScaleValue();
+        String theme = ThemeUtils.getApplicationTheme(context);
+
+        Locale.setDefault(locale);
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        config.locale = locale;
+        config.fontScale = fontScale;
+        context.getResources().updateConfiguration(config, context.getResources().getDisplayMetrics());
+
+        // init the theme
+        ThemeUtils.setApplicationTheme(context, theme);
+
+        // init the known locales in background
+        AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
+            @Override
+            protected Void doInBackground(Void... params) {
+                getApplicationLocales(VectorApp.getInstance());
+                return null;
+            }
+        };
+
+        // should never crash
+        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    /**
+     * Get the font scale
+     * @return the font scale
+     */
+    public static String getFontScale() {
+        Context context = VectorApp.getInstance();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        String scalePreferenceKey;
+
+        if (!preferences.contains(APPLICATION_FONT_SCALE_KEY)) {
+            float fontScale = context.getResources().getConfiguration().fontScale;
+
+            scalePreferenceKey = FONT_SCALE_NORMAL;
+
+            if (mPrefKeyByFontScale.containsKey(fontScale)) {
+                scalePreferenceKey = mPrefKeyByFontScale.get(fontScale);
+            }
+
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putString(APPLICATION_FONT_SCALE_KEY, scalePreferenceKey);
+            editor.commit();
+        } else {
+            scalePreferenceKey = preferences.getString(APPLICATION_FONT_SCALE_KEY, FONT_SCALE_NORMAL);
+        }
+
+        return scalePreferenceKey;
+    }
+
+    /**
+     * Provides the font scale value
+     * @return the font scale
+     */
+    private static float getFontScaleValue() {
+        String fontScale = getFontScale();
+
+        if (mPrefKeyByFontScale.containsValue(fontScale)) {
+            for (Map.Entry<Float, String> entry : mPrefKeyByFontScale.entrySet()) {
+                if (TextUtils.equals(entry.getValue(),fontScale)) {
+                    return entry.getKey();
+                }
+            }
+        }
+
+        return 1.0f;
+    }
+
+    /**
+     * Provides the font scale description
+     * @return the font description
+     */
+    public static String getFontScaleDescription() {
+        Context context = VectorApp.getInstance();
+        String fontScale = getFontScale();
+
+        if (mFontTextScaleIdByPrefKey.containsKey(fontScale)) {
+            return context.getString(mFontTextScaleIdByPrefKey.get(fontScale));
+        }
+
+        return context.getString(R.string.normal);
+    }
+
+    /**
+     * Update the font size from the locale description.
+     * @param fontScaleDescription the font scale description
+     */
+    public static void updateFontScale(String fontScaleDescription) {
+        Context context = VectorApp.getInstance();
+        for (Map.Entry<String, Integer> entry : mFontTextScaleIdByPrefKey.entrySet()) {
+            if (TextUtils.equals(context.getString(entry.getValue()), fontScaleDescription)) {
+                saveFontScale(entry.getKey());
+            }
+        }
+
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        config.fontScale = getFontScaleValue();
+        context.getResources().updateConfiguration(config, context.getResources().getDisplayMetrics());
+    }
+
+    /**
+     * Provides the current application locale
+     *
+     * @return the application locale
+     */
+    public static Locale getApplicationLocale() {
+        Context context = VectorApp.getInstance();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        Locale locale;
+
+        if (!preferences.contains(APPLICATION_LOCALE_LANGUAGE_KEY)) {
+            locale = Locale.getDefault();
+
+            // detect if the default language is used
+            String defaultStringValue = getString(context, mApplicationDefaultLanguage, R.string.resouces_country);
+            if (TextUtils.equals(defaultStringValue, getString(context, locale, R.string.resouces_country))) {
+                locale = mApplicationDefaultLanguage;
+            }
+
+            saveApplicationLocale(locale);
+        } else {
+            locale = new Locale(preferences.getString(APPLICATION_LOCALE_LANGUAGE_KEY, ""),
+                    preferences.getString(APPLICATION_LOCALE_COUNTRY_KEY, ""),
+                    preferences.getString(APPLICATION_LOCALE_VARIANT_KEY, "")
+            );
+        }
+
+        return locale;
+    }
+
+    /**
+     * Provides the device locale
+     *
+     * @return the device locale
+     */
+    public static Locale getDeviceLocale() {
+        Context context = VectorApp.getInstance();
+        Locale locale = getApplicationLocale();
+
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            Resources resources = packageManager.getResourcesForApplication("android");
+            locale = resources.getConfiguration().locale;
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "## getDeviceLocale() failed " + e.getMessage());
+        }
+
+        return locale;
+    }
+
+    /**
+     * Save the new application locale.
+     */
+    private static void saveApplicationLocale(Locale locale) {
+        Context context = VectorApp.getInstance();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+
+        SharedPreferences.Editor editor = preferences.edit();
+
+        String language = locale.getLanguage();
+        if (!TextUtils.isEmpty(language)) {
+            editor.putString(APPLICATION_LOCALE_LANGUAGE_KEY, language);
+        } else {
+            editor.remove(APPLICATION_LOCALE_LANGUAGE_KEY);
+        }
+
+        String country = locale.getCountry();
+        if (!TextUtils.isEmpty(country)) {
+            editor.putString(APPLICATION_LOCALE_COUNTRY_KEY, country);
+        } else {
+            editor.remove(APPLICATION_LOCALE_COUNTRY_KEY);
+        }
+
+        String variant = locale.getVariant();
+        if (!TextUtils.isEmpty(variant)) {
+            editor.putString(APPLICATION_LOCALE_VARIANT_KEY, variant);
+        } else {
+            editor.remove(APPLICATION_LOCALE_VARIANT_KEY);
+        }
+
+        editor.commit();
+    }
+
+    /**
+     * Save the new font scale
+     *
+     * @param textScale the text scale
+     */
+    private static void saveFontScale(String textScale) {
+        Context context = VectorApp.getInstance();
+
+        if (!TextUtils.isEmpty(textScale)) {
+            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putString(APPLICATION_FONT_SCALE_KEY, textScale);
+            editor.commit();
+        }
+    }
+
+    /**
+     * Update the application locale
+     * @param locale
+     */
+    public static void updateApplicationLocale(Locale locale) {
+        updateApplicationSettings(locale, getFontScale(), ThemeUtils.getApplicationTheme(VectorApp.getInstance()));
+    }
+
+    /**
+     * Update the application theme
+     * @param theme the new theme
+     */
+    public static void updateApplicationTheme(String theme) {
+        ThemeUtils.setApplicationTheme(VectorApp.getInstance(), theme);
+        updateApplicationSettings(getApplicationLocale(), getFontScale(), ThemeUtils.getApplicationTheme(VectorApp.getInstance()));
+    }
+
+    /**
+     * Update the application locale.
+     *
+     * @param locale  the locale
+     * @param theme  the new theme
+     */
+    private static void updateApplicationSettings(Locale locale, String textSize, String theme) {
+        Context context = VectorApp.getInstance();
+
+        saveApplicationLocale(locale);
+        saveFontScale(textSize);
+        Locale.setDefault(locale);
+
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        config.locale = locale;
+        config.fontScale = getFontScaleValue();
+        context.getResources().updateConfiguration(config, context.getResources().getDisplayMetrics());
+
+        ThemeUtils.setApplicationTheme(context, theme);
+        PhoneNumberUtils.onLocaleUpdate();
+    }
+
+    /**
+     * Get String from a locale
+     *
+     * @param context    the context
+     * @param locale     the locale
+     * @param resourceId the string resource id
+     * @return the localized string
+     */
+    private static String getString(Context context, Locale locale, int resourceId) {
+        String result;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            Configuration config = new Configuration(context.getResources().getConfiguration());
+            config.setLocale(locale);
+            try {
+                result = context.createConfigurationContext(config).getText(resourceId).toString();
+            } catch (Exception e) {
+                Log.e(LOG_TAG, "## getString() failed : " + e.getMessage());
+                // use the default one
+                result = context.getString(resourceId);
+            }
+        } else {
+            Resources resources = context.getResources();
+            Configuration conf = resources.getConfiguration();
+            Locale savedLocale = conf.locale;
+            conf.locale = locale;
+            resources.updateConfiguration(conf, null);
+
+            // retrieve resources from desired locale
+            result = resources.getString(resourceId);
+
+            // restore original locale
+            conf.locale = savedLocale;
+            resources.updateConfiguration(conf, null);
+        }
+
+        return result;
+    }
+
+    /**
+     * Provides the supported application locales list
+     *
+     * @param context the context
+     * @return the supported application locales list
+     */
+    public static List<Locale> getApplicationLocales(Context context) {
+        if (mApplicationLocales.isEmpty()) {
+
+            Set<Pair<String, String>> knownLocalesSet = new HashSet<>();
+
+            try {
+                final Locale[] availableLocales = Locale.getAvailableLocales();
+
+                for (Locale locale : availableLocales) {
+                    knownLocalesSet.add(new Pair<>(getString(context, locale, R.string.resouces_language), getString(context, locale, R.string.resouces_country)));
+                }
+            } catch (Exception e) {
+                Log.e(LOG_TAG, "## getApplicationLocales() : failed " + e.getMessage());
+                knownLocalesSet.add(new Pair<>(context.getString(R.string.resouces_language), context.getString(R.string.resouces_country)));
+            }
+
+            for (Pair<String, String> knownLocale : knownLocalesSet) {
+                mApplicationLocales.add(new Locale(knownLocale.first, knownLocale.second));
+            }
+        }
+
+        List<Locale> sortedLocalesList = new ArrayList<>(mApplicationLocales);
+
+        // sort by human display names
+        Collections.sort(sortedLocalesList, new Comparator<Locale>() {
+            @Override
+            public int compare(Locale lhs, Locale rhs) {
+                return localeToString(lhs).compareTo(localeToString(rhs));
+            }
+        });
+
+        return sortedLocalesList;
+    }
+
+    /**
+     * Convert a locale to a string
+     *
+     * @param locale the locale to convert
+     * @return the string
+     */
+    public static String localeToString(Locale locale) {
+        String res = locale.getDisplayLanguage();
+
+        if (!TextUtils.isEmpty(locale.getDisplayCountry())) {
+            res += " (" + locale.getDisplayCountry() + ")";
+        }
+
+        return res;
+    }
+}

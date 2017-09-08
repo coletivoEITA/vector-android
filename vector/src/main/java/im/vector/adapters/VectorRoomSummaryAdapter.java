@@ -16,23 +16,18 @@
 
 package im.vector.adapters;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.os.Build;
+import android.support.v4.content.ContextCompat;
 import android.text.TextUtils;
-import org.matrix.androidsdk.util.Log;
-import android.view.Gravity;
 import android.view.LayoutInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseExpandableListAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 
 import org.matrix.androidsdk.MXDataHandler;
@@ -43,11 +38,9 @@ import org.matrix.androidsdk.data.RoomSummary;
 import org.matrix.androidsdk.data.RoomTag;
 import org.matrix.androidsdk.rest.model.Event;
 import org.matrix.androidsdk.rest.model.User;
-import org.matrix.androidsdk.util.BingRulesManager;
 import org.matrix.androidsdk.util.EventDisplay;
+import org.matrix.androidsdk.util.Log;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,6 +50,8 @@ import java.util.List;
 import im.vector.Matrix;
 import im.vector.PublicRoomsManager;
 import im.vector.R;
+import im.vector.util.RoomUtils;
+import im.vector.util.ThemeUtils;
 import im.vector.util.VectorUtils;
 
 /**
@@ -69,15 +64,6 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
         void onPreviewRoom(MXSession session, String roomId);
         void onRejectInvitation(MXSession session, String roomId);
 
-        void onToggleRoomNotifications(MXSession session, String roomId);
-        void onToggleDirectChat(MXSession session, String roomId);
-
-        void moveToFavorites(MXSession session, String roomId);
-        void moveToConversations(MXSession session, String roomId);
-        void moveToLowPriority(MXSession session, String roomId);
-
-
-        void onLeaveRoom(MXSession session, String roomId);
         void onGroupCollapsedNotif(int aGroupPosition);
         void onGroupExpandedNotif(int aGroupPosition);
     }
@@ -101,6 +87,9 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
 
     // search mode
     private String mSearchedPattern;
+
+    // search mode set to true : display nothing if the search pattern is empty
+    // search mode set to false : display all the known entries if the search pattern is empty
     private final boolean mIsSearchMode;
     // when set to true, avoid empty history by displaying the directory group
     private final boolean mDisplayDirectoryGroupWhenEmpty;
@@ -112,6 +101,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
     private Integer mMatchedPublicRoomsCount;
 
     // the listener
+    private final RoomUtils.MoreActionListener mMoreActionListener;
     private final RoomEventListener mListener;
 
     // drag and drop mode
@@ -130,7 +120,9 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
      * @param aGroupHeaderLayoutResourceId the room section header layout
      * @param listener the events listener
      */
-    public VectorRoomSummaryAdapter(Context aContext, MXSession session, boolean isSearchMode, boolean displayDirectoryGroupWhenEmpty, int aChildLayoutResourceId, int aGroupHeaderLayoutResourceId, RoomEventListener listener)  {
+    public VectorRoomSummaryAdapter(Context aContext, MXSession session, boolean isSearchMode,
+                                    boolean displayDirectoryGroupWhenEmpty, int aChildLayoutResourceId,
+                                    int aGroupHeaderLayoutResourceId, RoomEventListener listener, RoomUtils.MoreActionListener moreActionListener)  {
         // init internal fields
         mContext = aContext;
         mLayoutInflater = LayoutInflater.from(mContext);
@@ -141,6 +133,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
         // get the complete summary list
         mMxSession = session;
         mListener = listener;
+        mMoreActionListener = moreActionListener;
 
         mIsSearchMode = isSearchMode;
         mDisplayDirectoryGroupWhenEmpty = displayDirectoryGroupWhenEmpty;
@@ -224,16 +217,11 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
      * @return true of the pattern is found.
      */
     private boolean isMatchedPattern(Room room) {
-        boolean res = true;
+        boolean  res = !mIsSearchMode;
 
-        // test only in search
-        if (mIsSearchMode) {
-            res = false;
-
-            if (!TextUtils.isEmpty(mSearchedPattern)) {
-                String roomName = VectorUtils.getRoomDisplayName(mContext, mMxSession, room);
-                res = (!TextUtils.isEmpty(roomName) && (roomName.toLowerCase().contains(mSearchedPattern)));
-            }
+        if (!TextUtils.isEmpty(mSearchedPattern)) {
+            String roomName = VectorUtils.getRoomDisplayName(mContext, mMxSession, room);
+            res = (!TextUtils.isEmpty(roomName) && (roomName.toLowerCase().contains(mSearchedPattern)));
         }
 
         return res;
@@ -479,11 +467,8 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
         if(null != roomSummary) {
             Room room = this.roomFromRoomSummary(roomSummary);
             if(null != room) {
-                room.sendReadReceipt(null);
+                room.sendReadReceipt();
             }
-
-            // reset the highlight
-            retCode = roomSummary.setHighlighted(false);
         }
 
         return retCode;
@@ -624,13 +609,13 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
             convertView = this.mLayoutInflater.inflate(this.mHeaderLayoutResourceId, null);
         }
 
-        TextView sectionNameTxtView = (TextView)convertView.findViewById(org.matrix.androidsdk.R.id.heading);
+        TextView sectionNameTxtView = (TextView)convertView.findViewById(R.id.heading);
 
         if (null != sectionNameTxtView) {
             sectionNameTxtView.setText(getGroupTitle(groupPosition));
         }
 
-        ImageView imageView = (ImageView) convertView.findViewById(org.matrix.androidsdk.R.id.heading_image);
+        ImageView imageView = (ImageView) convertView.findViewById(R.id.heading_image);
 
         if (mIsSearchMode) {
             imageView.setVisibility(View.GONE);
@@ -677,14 +662,14 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
             return convertView;
         }
 
-        int roomNameBlack = mContext.getResources().getColor(R.color.vector_text_black_color);
-        int fushiaColor = mContext.getResources().getColor(R.color.vector_fuchsia_color);
-        int vectorDefaultTimeStampColor = mContext.getResources().getColor(R.color.vector_0_54_black_color);
-        int vectorGreenColor = mContext.getResources().getColor(R.color.vector_green_color);
-        int vectorSilverColor = mContext.getResources().getColor(R.color.vector_silver_color);
+        int roomNameBlack = ThemeUtils.getColor(mContext, R.attr.riot_primary_text_color);
+        int fushiaColor = ContextCompat.getColor(mContext, R.color.vector_fuchsia_color);
+        int vectorDefaultTimeStampColor = ThemeUtils.getColor(mContext, R.attr.default_text_light_color);
+        int vectorGreenColor = ContextCompat.getColor(mContext, R.color.vector_green_color);
+        int vectorSilverColor = ContextCompat.getColor(mContext, R.color.vector_silver_color);
 
         // retrieve the UI items
-        ImageView avatarImageView = (ImageView)convertView.findViewById(R.id.room_avatar_image_view);
+        ImageView avatarImageView = (ImageView)convertView.findViewById(R.id.room_avatar);
         TextView roomNameTxtView = (TextView) convertView.findViewById(R.id.roomSummaryAdapter_roomName);
         TextView roomMsgTxtView = (TextView) convertView.findViewById(R.id.roomSummaryAdapter_roomMessage);
         View bingUnreadMsgView = convertView.findViewById(R.id.bing_indicator_unread_message);
@@ -752,7 +737,6 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
                 roomMsgTxtView.setText("");
                 avatarImageView.setImageBitmap(VectorUtils.getAvatar(avatarImageView.getContext(), VectorUtils.getAvatarColor(null), "@", true));
             }
-
             return convertView;
         }
 
@@ -768,7 +752,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
             highlightCount = childRoom.getHighlightCount();
             notificationCount = childRoom.getNotificationCount();
 
-            if (mMxSession.getDataHandler().getBingRulesManager().isRoomMentionOnly(childRoom)) {
+            if (mMxSession.getDataHandler().getBingRulesManager().isRoomMentionOnly(childRoom.getRoomId())) {
                 notificationCount = highlightCount;
             }
         }
@@ -777,7 +761,6 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
         CharSequence lastMsgToDisplay = getChildMessageToDisplay(childRoomSummary);
 
         // display the room avatar
-        avatarImageView.setBackgroundColor(mContext.getResources().getColor(android.R.color.transparent));
         final String roomName = VectorUtils.getRoomDisplayName(mContext, mMxSession, childRoom);
         VectorUtils.loadRoomAvatar(mContext, mMxSession, avatarImageView, childRoom);
 
@@ -796,7 +779,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
 
         // set bing view background colour
         int bingUnreadColor;
-        if ((0 != highlightCount) || childRoomSummary.isHighlighted()) {
+        if (0 != highlightCount) {
             bingUnreadColor = fushiaColor;
         } else if (0 != notificationCount) {
             bingUnreadColor = vectorGreenColor;
@@ -831,7 +814,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
             directChatIcon.setVisibility(View.GONE);
             encryptedIcon.setVisibility(View.GONE);
         }
-        
+
         bingUnreadMsgView.setVisibility(isInvited ? View.INVISIBLE : View.VISIBLE);
         invitationView.setVisibility(isInvited ? View.VISIBLE : View.GONE);
 
@@ -874,7 +857,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
             actionClickArea.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    displayPopupMenu(childRoom, actionView, isFavorite, isLowPrior);
+                    RoomUtils.displayPopupMenu(mContext, mMxSession, childRoom, actionView, isFavorite, isLowPrior, mMoreActionListener);
                 }
             });
 
@@ -886,111 +869,6 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
         separatorGroupView.setVisibility((isLastChild && ((groupPosition + 1) < getGroupCount())) ? View.VISIBLE : View.GONE);
 
         return convertView;
-    }
-
-    /**
-     * Display the recents action popup.
-     * @param childRoom the room in which the actions should be triggered in.
-     * @param actionView the anchor view.
-     * @param isFavorite true if it is a favorite room
-     * @param isLowPrior true it it is a low priority room
-     */
-    @SuppressLint("NewApi")
-    private void displayPopupMenu(final Room childRoom, final View actionView, final boolean isFavorite, final boolean isLowPrior) {
-        // sanity check
-        if (null == childRoom) {
-            return;
-        }
-
-        PopupMenu popup;
-
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            popup = new PopupMenu(VectorRoomSummaryAdapter.this.mContext, actionView.findViewById(R.id.roomSummaryAdapter_action_anchor), Gravity.END);
-        } else {
-            popup = new PopupMenu(VectorRoomSummaryAdapter.this.mContext, actionView.findViewById(R.id.roomSummaryAdapter_action_anchor));
-        }
-        popup.getMenuInflater().inflate(R.menu.vector_home_room_settings, popup.getMenu());
-
-        MenuItem item;
-
-        final BingRulesManager bingRulesManager = mMxSession.getDataHandler().getBingRulesManager();
-
-        if (bingRulesManager.isRoomNotificationsDisabled(childRoom)) {
-            item = popup.getMenu().getItem(0);
-            item.setIcon(null);
-        }
-
-        if (!isFavorite) {
-            item = popup.getMenu().getItem(1);
-            item.setIcon(null);
-        }
-
-        if (!isLowPrior) {
-            item = popup.getMenu().getItem(2);
-            item.setIcon(null);
-        }
-
-        if (mMxSession.getDirectChatRoomIdsList().indexOf(childRoom.getRoomId()) < 0) {
-            item = popup.getMenu().getItem(3);
-            item.setIcon(null);
-        }
-
-        // force to display the icon
-        try {
-            Field[] fields = popup.getClass().getDeclaredFields();
-            for (Field field : fields) {
-                if ("mPopup".equals(field.getName())) {
-                    field.setAccessible(true);
-                    Object menuPopupHelper = field.get(popup);
-                    Class<?> classPopupHelper = Class.forName(menuPopupHelper.getClass().getName());
-                    Method setForceIcons = classPopupHelper.getMethod("setForceShowIcon", boolean.class);
-                    setForceIcons.invoke(menuPopupHelper, true);
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            Log.e(LOG_TAG, "## displayPopupMenu() : failed " + e.getMessage());
-        }
-
-        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(final MenuItem item) {
-
-                switch (item.getItemId()) {
-                    case R.id.ic_action_select_notifications: {
-                        mListener.onToggleRoomNotifications(mMxSession, childRoom.getRoomId());
-                        break;
-                    }
-                    case R.id.ic_action_select_fav: {
-                        if (isFavorite) {
-                            mListener.moveToConversations(mMxSession, childRoom.getRoomId());
-                        } else {
-                            mListener.moveToFavorites(mMxSession, childRoom.getRoomId());
-                        }
-                        break;
-                    }
-                    case R.id.ic_action_select_deprioritize: {
-                        if (isLowPrior) {
-                            mListener.moveToConversations(mMxSession, childRoom.getRoomId());
-                        } else {
-                            mListener.moveToLowPriority(mMxSession, childRoom.getRoomId());
-                        }
-                        break;
-                    }
-                    case R.id.ic_action_select_remove: {
-                        mListener.onLeaveRoom(mMxSession, childRoom.getRoomId());
-                        break;
-                    }
-                    case R.id.ic_action_select_direct_chat : {
-                        mListener.onToggleDirectChat(mMxSession, childRoom.getRoomId());
-                        break;
-                    }
-                }
-                return false;
-            }
-        });
-
-        popup.show();
     }
 
     /**
@@ -1036,7 +914,7 @@ public class VectorRoomSummaryAdapter extends BaseExpandableListAdapter {
             if (aChildRoomSummary.getLatestReceivedEvent() != null) {
                 eventDisplay = new EventDisplay(mContext, aChildRoomSummary.getLatestReceivedEvent(), aChildRoomSummary.getLatestRoomState());
                 eventDisplay.setPrependMessagesWithAuthor(true);
-                messageToDisplayRetValue = eventDisplay.getTextualDisplay(mContext.getResources().getColor(R.color.vector_text_gray_color));
+                messageToDisplayRetValue = eventDisplay.getTextualDisplay(ThemeUtils.getColor(mContext, R.attr.riot_primary_text_color));
             }
 
             // check if this is an invite

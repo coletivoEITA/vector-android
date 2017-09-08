@@ -51,8 +51,8 @@ import org.matrix.androidsdk.rest.model.User;
 import org.matrix.androidsdk.util.Log;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -72,6 +72,9 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
     public static final String EXTRA_ROOM_ID = "EXTRA_ROOM_ID";
     public static final String EXTRA_MEMBER_ID = "EXTRA_MEMBER_ID";
+    public static final String EXTRA_MEMBER_DISPLAY_NAME = "EXTRA_MEMBER_DISPLAY_NAME";
+    public static final String EXTRA_MEMBER_AVATAR_URL = "EXTRA_MEMBER_AVATAR_URL";
+
     public static final String EXTRA_STORE_ID = "EXTRA_STORE_ID";
 
     public static final String RESULT_MENTION_ID = "RESULT_MENTION_ID";
@@ -489,7 +492,29 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
                                         if (0 != idsList.size()) {
                                             enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
-                                            mSession.ignoreUsers(idsList, mRoomActionsListener);
+                                            mSession.ignoreUsers(idsList, new ApiCallback<Void>() {
+                                                @Override
+                                                public void onSuccess(Void info) {
+                                                    // do not hide the progress bar to warn the user that something is pending
+                                                    // an initial sync should be triggered
+                                                }
+
+                                                @Override
+                                                public void onNetworkError(Exception e) {
+                                                    mRoomActionsListener.onNetworkError(e);
+                                                }
+
+                                                @Override
+                                                public void onMatrixError(MatrixError e) {
+                                                    mRoomActionsListener.onMatrixError(e);
+                                                }
+
+                                                @Override
+                                                public void onUnexpectedError(Exception e) {
+                                                    mRoomActionsListener.onUnexpectedError(e);
+                                                }
+                                            });
+
                                             Log.d(LOG_TAG, "## performItemAction(): ignoreUsers");
                                         }
                                     }
@@ -529,7 +554,29 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
                                         if (0 != idsList.size()) {
                                             enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
-                                            mSession.unIgnoreUsers(idsList, mRoomActionsListener);
+                                            mSession.unIgnoreUsers(idsList, new ApiCallback<Void>() {
+                                                @Override
+                                                public void onSuccess(Void info) {
+                                                    // do not hide the progress bar to warn the user that something is pending
+                                                    // an initial sync should be triggered
+                                                }
+
+                                                @Override
+                                                public void onNetworkError(Exception e) {
+                                                    mRoomActionsListener.onNetworkError(e);
+                                                }
+
+                                                @Override
+                                                public void onMatrixError(MatrixError e) {
+                                                    mRoomActionsListener.onMatrixError(e);
+                                                }
+
+                                                @Override
+                                                public void onUnexpectedError(Exception e) {
+                                                    mRoomActionsListener.onUnexpectedError(e);
+                                                }
+                                            });
+
                                             Log.d(LOG_TAG, "## performItemAction(): unIgnoreUsers");
                                         }
                                     }
@@ -595,7 +642,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
 
             // force the refresh to ensure that the devices list is up-to-date
-            mSession.getCrypto().getDeviceList().downloadKeys(Arrays.asList(mMemberId), true, new ApiCallback<MXUsersDevicesMap<MXDeviceInfo>>() {
+            mSession.getCrypto().getDeviceList().downloadKeys(Collections.singletonList(mMemberId), true, new ApiCallback<MXUsersDevicesMap<MXDeviceInfo>>() {
                 // common default error handler
                 private void onError(String aErrorMsg) {
                     Toast.makeText(VectorMemberDetailsActivity.this, aErrorMsg, Toast.LENGTH_LONG).show();
@@ -1037,7 +1084,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
                 }
             }
 
-            imageResource = R.drawable.vector_create_direct_room;
+            imageResource = R.drawable.ic_add_black;
             actionText = getResources().getString(R.string.start_new_chat);
             directMessagesActions.add(new VectorMemberDetailsAdapter.AdapterMemberActionItems(imageResource, actionText, ITEM_ACTION_START_CHAT));
 
@@ -1078,13 +1125,10 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             // init failed, just return
             Log.e(LOG_TAG, "## onCreate(): Parameters init failure");
             finish();
-        }
-        // find out the room member to set mRoomMember field.
-        // if mRoomMember is not found among the members of the room, just finish the activity
-        else if (!checkRoomMemberStatus()) {
-            Log.e(LOG_TAG, "## onCreate(): The user " + mMemberId + " is not in the room " + mRoomId);
-            finish();
         } else {
+            // check if the user is a member of the room
+            checkRoomMemberStatus();
+
             // setup UI view and bind the widgets
             setContentView(R.layout.activity_member_details);
 
@@ -1114,7 +1158,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             mDevicesListView.setAdapter(mDevicesListViewAdapter);
             // devices header row
             mDevicesListHeaderView = findViewById(R.id.devices_header_view);
-            TextView devicesHeaderTitleTxtView = (TextView) mDevicesListHeaderView.findViewById(org.matrix.androidsdk.R.id.heading);
+            TextView devicesHeaderTitleTxtView = (TextView) mDevicesListHeaderView.findViewById(R.id.heading);
             if (null != devicesHeaderTitleTxtView) {
                 devicesHeaderTitleTxtView.setText(R.string.room_participants_header_devices);
             }
@@ -1286,7 +1330,10 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
                 store = Matrix.getInstance(this).getTmpStore(storeIndex);
             } else {
                 store = mSession.getDataHandler().getStore();
-                mUser = store.getUser(mMemberId);
+
+                if (refreshUser()) {
+                    intent.removeExtra(EXTRA_ROOM_ID);
+                }
             }
 
             mRoomId = intent.getStringExtra(EXTRA_ROOM_ID);
@@ -1327,6 +1374,31 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
     }
 
     /**
+     * Refresh the user information
+     * @return true if the user is not a known one
+     */
+    private boolean refreshUser() {
+        mUser = mSession.getDataHandler().getStore().getUser(mMemberId);
+
+        // build a tmp user from the data provided as parameters
+        if (null == mUser) {
+            mUser = new User();
+            mUser.user_id = mMemberId;
+            mUser.displayname = getIntent().getStringExtra(EXTRA_MEMBER_DISPLAY_NAME);
+
+            if (TextUtils.isEmpty(mUser.displayname)) {
+                mUser.displayname = mMemberId;
+            }
+
+            mUser.avatar_url  = getIntent().getStringExtra(EXTRA_MEMBER_AVATAR_URL);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Update the UI
      */
     private void updateUi() {
@@ -1339,13 +1411,8 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             if ((null != mRoomMember) && !TextUtils.isEmpty(mRoomMember.displayname)) {
                 mMemberNameTextView.setText(mRoomMember.displayname);
             } else {
-                mUser = mSession.getDataHandler().getStore().getUser(mMemberId);
-
-                if ((null != mUser) && !TextUtils.isEmpty(mUser.displayname)) {
-                    mMemberNameTextView.setText(mUser.displayname);
-                } else {
-                    mMemberNameTextView.setText(mMemberId);
-                }
+                refreshUser();
+                mMemberNameTextView.setText(mUser.displayname);
             }
 
             // do not display the activity name in the action bar
