@@ -30,8 +30,9 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
-import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import org.matrix.androidsdk.util.Log;
@@ -70,7 +71,7 @@ import im.vector.view.VectorPendingCallView;
 /**
  * VectorCallViewActivity is the call activity.
  */
-public class VectorCallViewActivity extends AppCompatActivity implements SensorEventListener {
+public class VectorCallViewActivity extends RiotAppCompatActivity implements SensorEventListener {
     private static final String LOG_TAG = "VCallViewActivity";
     private static final String HANGUP_MSG_HEADER_UI_CALL = "user hangup from header back arrow";
     private static final String HANGUP_MSG_BACK_KEY = "user hangup from back key";
@@ -151,6 +152,48 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
     // on Samsung devices, the application is suspended when the screen is turned off
     // so the call must not be suspended
     private boolean mIsScreenOff = false;
+
+    private static final IMXCall.MXCallListener mBackgroundListener = new IMXCall.MXCallListener() {
+        @Override
+        public void onStateDidChange(String state) {
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    manageRingTone();
+                }
+            });
+        }
+
+        @Override
+        public void onCallError(String error) {
+
+        }
+
+        @Override
+        public void onViewLoading(View callView) {
+
+        }
+
+        @Override
+        public void onViewReady() {
+
+        }
+
+        @Override
+        public void onCallAnsweredElsewhere() {
+
+        }
+
+        @Override
+        public void onCallEnd(final int aReasonId) {
+
+        }
+
+        @Override
+        public void onPreviewSizeChanged(int width, int height) {
+
+        }
+    };
 
     private final IMXCall.MXCallListener mListener = new IMXCall.MXCallListener() {
         private String mLastCallState = null;
@@ -341,6 +384,8 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
 
             mLocalVideoLayoutConfig.mX = mPreviewRect.left * 100 / screenWidth;
             mLocalVideoLayoutConfig.mY = mPreviewRect.top * 100 / screenHeight;
+            mLocalVideoLayoutConfig.mDisplayWidth = screenWidth;
+            mLocalVideoLayoutConfig.mDisplayHeight = screenHeight;
 
             mIsCustomLocalVideoLayoutConfig = true;
             mCall.updateLocalVideoRendererPosition(mLocalVideoLayoutConfig);
@@ -450,6 +495,7 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
     private void clearCallData() {
         if (null != mCall) {
             mCall.removeListener(mListener);
+            mCall.removeListener(mBackgroundListener);
         }
 
         // remove header call view
@@ -496,6 +542,10 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
 
             // add the call view only is the call is a video one
             if (mCall.isVideo()) {
+                // reported by a rageshake
+                if (null != mCallView.getParent()) {
+                    ((ViewGroup)mCallView.getParent()).removeView(mCallView);
+                }
                 layout.addView(mCallView, 1, params);
             }
             // init as GONE, will be displayed according to call states..
@@ -689,8 +739,17 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
             this.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    // call once
-                    if (mCall.isVideo() || (!mCall.isIncoming() && (TextUtils.equals(IMXCall.CALL_STATE_CREATED, mCall.getCallState())))) {
+                    if (null != mCall.getCallView()) {
+                        mCallView = mCall.getCallView();
+                        insertCallView();
+                        computeVideoUiLayout();
+                        mCall.updateLocalVideoRendererPosition(mLocalVideoLayoutConfig);
+
+                        // if the view is ready, launch the incoming call
+                        if (TextUtils.equals(mCall.getCallState(), IMXCall.CALL_STATE_FLEDGLING) && mCall.isIncoming()) {
+                            mCall.launchIncomingCall(mLocalVideoLayoutConfig);
+                        }
+                    } else if (mCall.isVideo() || (!mCall.isIncoming() && (TextUtils.equals(IMXCall.CALL_STATE_CREATED, mCall.getCallState())))) {
                         mCall.createCallView();
                     }
                 }
@@ -815,7 +874,7 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
     private void toggleRearFrontCamera() {
         boolean wasCameraSwitched = false;
 
-        if ((null != mCall) && mCall.getCallState().equals(IMXCall.CALL_STATE_CONNECTED) && mCall.isVideo()) {
+        if ((null != mCall) && mCall.isVideo()) {
             wasCameraSwitched = mCall.switchRearFrontCamera();
         } else {
             Log.w(LOG_TAG, "## toggleRearFrontCamera(): Skipped");
@@ -907,6 +966,7 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
             if (null != mCall) {
                 mCall.onPause();
                 mCall.removeListener(mListener);
+                mCall.addListener(mBackgroundListener);
             }
         }
     }
@@ -926,6 +986,7 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
         if (null != mCall) {
             if (!mIsScreenOff) {
                 mCall.onResume();
+                mCall.removeListener(mBackgroundListener);
                 mCall.addListener(mListener);
             }
 
@@ -1013,7 +1074,7 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
      * @param aOpacity UTILS_OPACITY_FULL to fade out, UTILS_OPACITY_NONE to fade in
      * @param aAnimDuration animation duration in milliseconds
      */
-        private void fadeVideoEdge(final float aOpacity, int aAnimDuration) {
+    private void fadeVideoEdge(final float aOpacity, int aAnimDuration) {
         if(null != mHeaderPendingCallView){
             if(aOpacity != mHeaderPendingCallView.getAlpha()) {
                 mHeaderPendingCallView.animate().alpha(aOpacity).setDuration(aAnimDuration).setInterpolator(new AccelerateInterpolator());
@@ -1127,6 +1188,8 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
         }
 
         mLocalVideoLayoutConfig.mIsPortrait = (getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE);
+        mLocalVideoLayoutConfig.mDisplayWidth = screenWidth;
+        mLocalVideoLayoutConfig.mDisplayHeight = screenHeight;
 
         Log.d(LOG_TAG, "## computeVideoUiLayout() : x " + mLocalVideoLayoutConfig.mX + " y " +  mLocalVideoLayoutConfig.mY);
         Log.d(LOG_TAG, "## computeVideoUiLayout() : mWidth " + mLocalVideoLayoutConfig.mWidth + " mHeight " +  mLocalVideoLayoutConfig.mHeight);
@@ -1309,17 +1372,12 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
             }
         }
 
-        // ringing management
-        switch (callState) {
-            case IMXCall.CALL_STATE_CONNECTING:
-            case IMXCall.CALL_STATE_CREATE_ANSWER:
-            case IMXCall.CALL_STATE_WAIT_LOCAL_MEDIA:
-            case IMXCall.CALL_STATE_WAIT_CREATE_OFFER:
-                VectorCallSoundManager.stopRinging();
-                break;
+        // ring tone
+        manageRingTone();
 
+        // other management
+        switch (callState) {
             case IMXCall.CALL_STATE_CONNECTED:
-                VectorCallSoundManager.stopRinging();
                 VectorCallViewActivity.this.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -1332,13 +1390,6 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
                 if (mAutoAccept) {
                     mAutoAccept = false;
                     mCall.answer();
-                } else {
-                    if (mCall.isIncoming()) {
-                        VectorCallSoundManager.startRinging();
-                    }
-                    else {
-                        VectorCallSoundManager.startRingBackSound(mCall.isVideo());
-                    }
                 }
                 break;
 
@@ -1347,6 +1398,47 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
                 break;
         }
         Log.d(LOG_TAG, "## manageSubViews(): OUT");
+    }
+
+    /**
+     * Manage the ring tones
+     */
+    private static void manageRingTone() {
+        if (null == mCall) {
+            Log.d(LOG_TAG, "## manageRingTone(): call instance = null, just return");
+            return;
+        }
+
+        String callState = mCall.getCallState();
+
+        // ringing management
+        switch (callState) {
+            case IMXCall.CALL_STATE_CONNECTING:
+            case IMXCall.CALL_STATE_CREATE_ANSWER:
+            case IMXCall.CALL_STATE_WAIT_LOCAL_MEDIA:
+            case IMXCall.CALL_STATE_WAIT_CREATE_OFFER:
+                VectorCallSoundManager.stopRinging();
+                break;
+
+            case IMXCall.CALL_STATE_CONNECTED:
+                VectorCallSoundManager.stopRinging();
+                break;
+
+            case IMXCall.CALL_STATE_RINGING:
+                if (mCall.isIncoming()) {
+                    // TODO IncomingCallActivity disables the ringing when the user accepts the call.
+                    // when IncomingCallActivity will be removed, it should be enabled again
+                    //VectorCallSoundManager.startRinging();
+                }
+                else {
+                    VectorCallSoundManager.startRingBackSound(mCall.isVideo());
+                }
+                break;
+
+            default:
+                // nothing to do..
+                break;
+        }
     }
 
     private void saveCallView() {
@@ -1400,6 +1492,7 @@ public class VectorCallViewActivity extends AppCompatActivity implements SensorE
     public void onDestroy() {
         if (null != mCall) {
             mCall.removeListener(mListener);
+            mCall.removeListener(mBackgroundListener);
         }
 
         if (mIsCallEnded || mIsCalleeBusy) {
