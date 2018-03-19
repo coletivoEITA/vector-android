@@ -41,7 +41,7 @@ import org.matrix.androidsdk.data.store.IMXStore;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.client.EventsRestClient;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.PublicRoom;
+import org.matrix.androidsdk.rest.model.publicroom.PublicRoom;
 import org.matrix.androidsdk.util.Log;
 
 import java.util.ArrayList;
@@ -58,12 +58,13 @@ import im.vector.activity.VectorRoomActivity;
 import im.vector.adapters.AdapterSection;
 import im.vector.adapters.RoomAdapter;
 import im.vector.util.RoomDirectoryData;
+import im.vector.util.RoomUtils;
 import im.vector.view.EmptyViewItemDecoration;
 import im.vector.view.SectionView;
 import im.vector.view.SimpleDividerItemDecoration;
 
 public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.OnRoomChangedListener {
-    private static final String LOG_TAG = PeopleFragment.class.getSimpleName();
+    private static final String LOG_TAG = RoomsFragment.class.getSimpleName();
 
     // activity result codes
     private static final int DIRECTORY_SOURCE_ACTIVITY_REQUEST_CODE = 314;
@@ -87,7 +88,7 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
     private RoomDirectoryData mSelectedRoomDirectory;
 
     // rooms list
-    private List<Room> mRooms = new ArrayList<>();
+    private final List<Room> mRooms = new ArrayList<>();
 
     /*
      * *********************************************************************************************
@@ -253,6 +254,11 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
      * Init the rooms display
      */
     private void refreshRooms() {
+        if ((null == mSession) || (null == mSession.getDataHandler())) {
+            Log.e(LOG_TAG, "## refreshRooms() : null session");
+            return;
+        }
+
         IMXStore store = mSession.getDataHandler().getStore();
 
         if (null == store) {
@@ -262,7 +268,6 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
 
         // update/retrieve the complete summary list
         List<RoomSummary> roomSummaries = new ArrayList<>(store.getSummaries());
-        HashSet<String> directChatRoomIds = new HashSet<>(mSession.getDirectChatRoomIdsList());
         HashSet<String> lowPriorityRoomIds = new HashSet<>(mSession.roomIdsWithTag(RoomTag.ROOM_TAG_LOW_PRIORITY));
 
         mRooms.clear();
@@ -275,7 +280,7 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
                 // test
                 if ((null != room) && // if the room still exists
                         !room.isConferenceUserRoom() && // not a VOIP conference room
-                        !directChatRoomIds.contains(room.getRoomId()) &&
+                        !RoomUtils.isDirectChat(mSession, room.getRoomId()) &&
                         !lowPriorityRoomIds.contains(room.getRoomId())) {
                     mRooms.add(room);
                 }
@@ -380,12 +385,12 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
             int lastVisibleItemPosition = layoutManager.findLastCompletelyVisibleItemPosition();
 
             // we load public rooms 20 by 20, when the 10th one becomes visible, starts loading the next 20
-            SectionView sectionView = mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount()-1);
+            SectionView sectionView = mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount() - 1);
             AdapterSection lastSection = sectionView != null ? sectionView.getSection() : null;
 
             if (null != lastSection) {
                 // detect if the last visible item is inside another section
-                for(int i = 0; i < mAdapter.getSectionsCount()-1; i++) {
+                for (int i = 0; i < mAdapter.getSectionsCount() - 1; i++) {
                     SectionView prevSectionView = mAdapter.getSectionViewForSectionIndex(i);
 
                     if ((null != prevSectionView) && (null != prevSectionView.getSection())) {
@@ -459,14 +464,14 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
      * Display the public rooms loading view
      */
     private void showPublicRoomsLoadingView() {
-        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount()-1).showLoadingView();
+        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount() - 1).showLoadingView();
     }
 
     /**
      * Hide the public rooms loading view
      */
     private void hidePublicRoomsLoadingView() {
-        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount()-1).hideLoadingView();
+        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount() - 1).hideLoadingView();
     }
 
     /**
@@ -548,7 +553,7 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
                                 mRecycler.post(new Runnable() {
                                     @Override
                                     public void run() {
-                                        SectionView publicSectionView = mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount()-1);
+                                        SectionView publicSectionView = mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount() - 1);
 
                                         // simulate a click on the header is to display the full list
                                         if ((null != publicSectionView) && !publicSectionView.isStickyHeader()) {
@@ -664,11 +669,15 @@ public class RoomsFragment extends AbsHomeFragment implements AbsHomeFragment.On
 
     @Override
     public void onToggleDirectChat(String roomId, boolean isDirectChat) {
-
     }
 
     @Override
     public void onRoomLeft(String roomId) {
+    }
 
+    @Override
+    public void onRoomForgot(String roomId) {
+        // there is no sync event when a room is forgotten
+        refreshRooms();
     }
 }

@@ -21,7 +21,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.view.MenuItemCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SearchView;
@@ -38,7 +37,7 @@ import im.vector.VectorApp;
 import im.vector.adapters.LanguagesAdapter;
 import im.vector.util.ThemeUtils;
 
-public class LanguagePickerActivity extends AppCompatActivity implements LanguagesAdapter.OnSelectLocaleListener, SearchView.OnQueryTextListener {
+public class LanguagePickerActivity extends RiotAppCompatActivity implements LanguagesAdapter.OnSelectLocaleListener, SearchView.OnQueryTextListener {
 
     private View mLanguagesEmptyView;
     private LanguagesAdapter mAdapter;
@@ -67,7 +66,7 @@ public class LanguagePickerActivity extends AppCompatActivity implements Languag
         setTitle(R.string.settings_select_language);
         setContentView(R.layout.activity_langagues_picker);
 
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         if (toolbar != null) {
             setSupportActionBar(toolbar);
             if (getSupportActionBar() != null) {
@@ -92,7 +91,7 @@ public class LanguagePickerActivity extends AppCompatActivity implements Languag
             mSearchView.setQueryHint(getString(R.string.search_hint));
             mSearchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
             mSearchView.setOnQueryTextListener(this);
-            SearchView.SearchAutoComplete searchAutoComplete = (SearchView.SearchAutoComplete) mSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
+            SearchView.SearchAutoComplete searchAutoComplete = mSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
             searchAutoComplete.setHintTextColor(ThemeUtils.getColor(this, R.attr.default_text_hint_color));
         }
         return true;
@@ -125,7 +124,7 @@ public class LanguagePickerActivity extends AppCompatActivity implements Languag
 
     private void initViews() {
         mLanguagesEmptyView = findViewById(R.id.languages_empty_view);
-        RecyclerView languagesRecyclerView = (RecyclerView) findViewById(R.id.languages_recycler_view);
+        RecyclerView languagesRecyclerView = findViewById(R.id.languages_recycler_view);
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setOrientation(LinearLayoutManager.VERTICAL);
         languagesRecyclerView.setLayoutManager(layoutManager);

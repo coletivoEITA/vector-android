@@ -21,10 +21,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.provider.Browser;
 import android.support.v4.app.FragmentManager;
 import android.text.TextUtils;
@@ -43,11 +41,10 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 
 import org.matrix.androidsdk.MXSession;
-import org.matrix.androidsdk.adapters.MessageRow;
 import org.matrix.androidsdk.adapters.AbstractMessagesAdapter;
+import org.matrix.androidsdk.adapters.MessageRow;
 import org.matrix.androidsdk.crypto.data.MXDeviceInfo;
 import org.matrix.androidsdk.crypto.data.MXUsersDevicesMap;
-import org.matrix.androidsdk.data.EventTimeline;
 import org.matrix.androidsdk.data.RoomState;
 import org.matrix.androidsdk.db.MXMediasCache;
 import org.matrix.androidsdk.fragments.MatrixMessageListFragment;
@@ -55,24 +52,22 @@ import org.matrix.androidsdk.fragments.MatrixMessagesFragment;
 import org.matrix.androidsdk.listeners.MXMediaDownloadListener;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
-import org.matrix.androidsdk.rest.model.EncryptedEventContent;
-import org.matrix.androidsdk.rest.model.EncryptedFileInfo;
 import org.matrix.androidsdk.rest.model.Event;
-import org.matrix.androidsdk.rest.model.FileMessage;
-import org.matrix.androidsdk.rest.model.ImageMessage;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.Message;
-import org.matrix.androidsdk.rest.model.VideoMessage;
-import org.matrix.androidsdk.rest.model.bingrules.BingRule;
+import org.matrix.androidsdk.rest.model.crypto.EncryptedEventContent;
+import org.matrix.androidsdk.rest.model.crypto.EncryptedFileInfo;
+import org.matrix.androidsdk.rest.model.message.FileMessage;
+import org.matrix.androidsdk.rest.model.message.ImageMessage;
+import org.matrix.androidsdk.rest.model.message.Message;
+import org.matrix.androidsdk.rest.model.message.VideoMessage;
 import org.matrix.androidsdk.util.JsonUtils;
 import org.matrix.androidsdk.util.Log;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
 import im.vector.Matrix;
 import im.vector.R;
@@ -86,30 +81,37 @@ import im.vector.adapters.VectorMessagesAdapter;
 import im.vector.db.VectorContentProvider;
 import im.vector.listeners.IMessagesAdapterActionsListener;
 import im.vector.receiver.VectorUniversalLinkReceiver;
+import im.vector.util.PreferencesManager;
 import im.vector.util.SlidableMediaInfo;
 import im.vector.util.ThemeUtils;
+import im.vector.util.VectorImageGetter;
 import im.vector.util.VectorUtils;
+import im.vector.widgets.WidgetsManager;
 
 public class VectorMessageListFragment extends MatrixMessageListFragment implements IMessagesAdapterActionsListener {
-    private static final String LOG_TAG = "VectorMessageListFrg";
+    private static final String LOG_TAG = VectorMessageListFragment.class.getSimpleName();
 
     public interface IListFragmentEventListener {
         void onListTouch();
     }
 
     private static final String TAG_FRAGMENT_RECEIPTS_DIALOG = "TAG_FRAGMENT_RECEIPTS_DIALOG";
+    private static final String TAG_FRAGMENT_USER_GROUPS_DIALOG = "TAG_FRAGMENT_USER_GROUPS_DIALOG";
+
     private IListFragmentEventListener mHostActivityListener;
 
     // onMediaAction actions
     // private static final int ACTION_VECTOR_SHARE = R.id.ic_action_vector_share;
     private static final int ACTION_VECTOR_FORWARD = R.id.ic_action_vector_forward;
     private static final int ACTION_VECTOR_SAVE = R.id.ic_action_vector_save;
-    public static final int ACTION_VECTOR_OPEN = 123456;
+    static final int ACTION_VECTOR_OPEN = 123456;
 
     // spinners
     private View mBackProgressView;
     private View mForwardProgressView;
     private View mMainProgressView;
+
+    private VectorImageGetter mVectorImageGetter;
 
     public static VectorMessageListFragment newInstance(String matrixId, String roomId, String eventId, String previewMode, int layoutResId) {
         VectorMessageListFragment f = new VectorMessageListFragment();
@@ -145,6 +147,11 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
 
         if (null != mRoom) {
             ((VectorMessagesAdapter) mAdapter).mIsRoomEncrypted = mRoom.isEncrypted();
+        }
+
+        if (null != mSession) {
+            mVectorImageGetter = new VectorImageGetter(mSession);
+            ((VectorMessagesAdapter) mAdapter).setImageGetter(mVectorImageGetter);
         }
 
         mMessageListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -203,6 +210,8 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             adapter.setVectorMessagesAdapterActionsListener(null);
             adapter.onPause();
         }
+
+        mVectorImageGetter.setListener(null);
     }
 
 
@@ -213,6 +222,13 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             VectorMessagesAdapter adapter = ((VectorMessagesAdapter) mAdapter);
             adapter.setVectorMessagesAdapterActionsListener(this);
         }
+
+        mVectorImageGetter.setListener(new VectorImageGetter.OnImageDownloadListener() {
+            @Override
+            public void onImageDownloaded(String source) {
+                mAdapter.notifyDataSetChanged();
+            }
+        });
     }
 
     /**
@@ -264,14 +280,21 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             mHostActivityListener.onListTouch();
     }
 
+    @Override
+    protected boolean canAddEvent(Event event) {
+        return TextUtils.equals(WidgetsManager.WIDGET_EVENT_TYPE, event.getType()) || super.canAddEvent(event);
+    }
+
     /**
      * Update the encrypted status of the room
      *
      * @param isEncrypted true when the room is encrypted
      */
     public void setIsRoomEncrypted(boolean isEncrypted) {
-        ((VectorMessagesAdapter) mAdapter).mIsRoomEncrypted = isEncrypted;
-        mAdapter.notifyDataSetChanged();
+        if (((VectorMessagesAdapter) mAdapter).mIsRoomEncrypted != isEncrypted) {
+            ((VectorMessagesAdapter) mAdapter).mIsRoomEncrypted = isEncrypted;
+            mAdapter.notifyDataSetChanged();
+        }
     }
 
     /**
@@ -293,19 +316,12 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     }
 
     /**
-     * Get the event timeline
-     *
-     * @return
-     */
-    public EventTimeline getEventTimeline() {
-        return mEventTimeLine;
-    }
-
-    /**
      * Cancel the messages selection mode.
      */
     public void cancelSelectionMode() {
-        ((VectorMessagesAdapter) mAdapter).cancelSelectionMode();
+        if (null != mAdapter) {
+            ((VectorMessagesAdapter) mAdapter).cancelSelectionMode();
+        }
     }
 
     private final ApiCallback<Void> mDeviceVerificationCallback = new ApiCallback<Void>() {
@@ -346,31 +362,31 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
 
         TextView textView;
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_info_user_id);
+        textView = layout.findViewById(R.id.encrypted_info_user_id);
         textView.setText(event.getSender());
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_info_curve25519_identity_key);
+        textView = layout.findViewById(R.id.encrypted_info_curve25519_identity_key);
         if (null != deviceInfo) {
             textView.setText(encryptedEventContent.sender_key);
         } else {
             textView.setText(getActivity().getString(R.string.encryption_information_none));
         }
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_info_claimed_ed25519_fingerprint_key);
+        textView = layout.findViewById(R.id.encrypted_info_claimed_ed25519_fingerprint_key);
         if (null != deviceInfo) {
             textView.setText(deviceInfo.fingerprint());
         } else {
             textView.setText(getActivity().getString(R.string.encryption_information_none));
         }
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_info_algorithm);
+        textView = layout.findViewById(R.id.encrypted_info_algorithm);
         textView.setText(encryptedEventContent.algorithm);
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_info_session_id);
+        textView = layout.findViewById(R.id.encrypted_info_session_id);
         textView.setText(encryptedEventContent.session_id);
 
         View decryptionErrorLabelTextView = layout.findViewById(R.id.encrypted_info_decryption_error_label);
-        textView = (TextView) layout.findViewById(R.id.encrypted_info_decryption_error);
+        textView = layout.findViewById(R.id.encrypted_info_decryption_error);
 
         if (null != event.getCryptoError()) {
             decryptionErrorLabelTextView.setVisibility(View.VISIBLE);
@@ -388,13 +404,13 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             noDeviceInfoLayout.setVisibility(View.GONE);
             deviceInfoLayout.setVisibility(View.VISIBLE);
 
-            textView = (TextView) layout.findViewById(R.id.encrypted_info_name);
+            textView = layout.findViewById(R.id.encrypted_info_name);
             textView.setText(deviceInfo.displayName());
 
-            textView = (TextView) layout.findViewById(R.id.encrypted_info_device_id);
+            textView = layout.findViewById(R.id.encrypted_info_device_id);
             textView.setText(deviceInfo.deviceId);
 
-            textView = (TextView) layout.findViewById(R.id.encrypted_info_verification);
+            textView = layout.findViewById(R.id.encrypted_info_verification);
 
             if (deviceInfo.isUnknown() || deviceInfo.isUnverified()) {
                 textView.setText(getActivity().getString(R.string.encryption_information_not_verified));
@@ -404,7 +420,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 textView.setText(getActivity().getString(R.string.encryption_information_blocked));
             }
 
-            textView = (TextView) layout.findViewById(R.id.encrypted_ed25519_fingerprint);
+            textView = layout.findViewById(R.id.encrypted_ed25519_fingerprint);
             textView.setText(deviceInfo.fingerprint());
         } else {
             noDeviceInfoLayout.setVisibility(View.VISIBLE);
@@ -470,7 +486,9 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             mSession.getCrypto().getDeviceList().downloadKeys(Collections.singletonList(event.getSender()), true, new ApiCallback<MXUsersDevicesMap<MXDeviceInfo>>() {
                 @Override
                 public void onSuccess(MXUsersDevicesMap<MXDeviceInfo> info) {
-                    if (dialog.isShowing()) {
+                    Activity activity = getActivity();
+
+                    if ((null != activity) && !activity.isFinishing() && dialog.isShowing()) {
                         EncryptedEventContent encryptedEventContent = JsonUtils.toEncryptedEventContent(event.getWireContent().getAsJsonObject());
 
                         MXDeviceInfo deviceInfo = mSession.getCrypto().deviceWithIdentityKey(encryptedEventContent.sender_key, event.getSender(), encryptedEventContent.algorithm);
@@ -595,8 +613,8 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 // Quote all paragraphs instead
                 String[] messageParagraphs = textMsg.split("\n\n");
                 String quotedTextMsg = "";
-                for(int i = 0; i < messageParagraphs.length; i++) {
-                    if(!messageParagraphs[i].trim().equals("")) {
+                for (int i = 0; i < messageParagraphs.length; i++) {
+                    if (!messageParagraphs[i].trim().equals("")) {
                         quotedTextMsg += "> " + messageParagraphs[i];
                     }
 
@@ -665,7 +683,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
 
                     View view = getActivity().getLayoutInflater().inflate(R.layout.dialog_event_content, null);
-                    TextView textview = (TextView) view.findViewById(R.id.event_content_text_view);
+                    TextView textview = view.findViewById(R.id.event_content_text_view);
 
                     Gson gson = new GsonBuilder().setPrettyPrinting().create();
                     textview.setText(gson.toJson(JsonUtils.toJson((action == R.id.ic_action_view_source) ? event : event.getClearEvent())));
@@ -754,69 +772,73 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
      * @param mediaMimeType the mime type
      * @param filename      the filename
      */
-    protected void onMediaAction(final int menuAction, final String mediaUrl, final String mediaMimeType, final String filename, final EncryptedFileInfo encryptedFileInfo) {
-        MXMediasCache mediasCache = Matrix.getInstance(getActivity()).getMediasCache();
-        File file = mediasCache.mediaCacheFile(mediaUrl, mediaMimeType);
+    void onMediaAction(final int menuAction, final String mediaUrl, final String mediaMimeType, final String filename, final EncryptedFileInfo encryptedFileInfo) {
+        // Santize file name in case `m.body` contains a path.
+        final String trimmedFileName = new File(filename).getName();
 
+        MXMediasCache mediasCache = Matrix.getInstance(getActivity()).getMediasCache();
         // check if the media has already been downloaded
-        if (null != file) {
-            // download
-            if ((menuAction == ACTION_VECTOR_SAVE) || (menuAction == ACTION_VECTOR_OPEN)) {
-                CommonActivityUtils.saveMediaIntoDownloads(getActivity(), file, filename, mediaMimeType, new SimpleApiCallback<String>() {
-                    @Override
-                    public void onSuccess(String savedMediaPath) {
-                        if (null != savedMediaPath) {
-                            if (menuAction == ACTION_VECTOR_SAVE) {
-                                Toast.makeText(getActivity(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
+        if (mediasCache.isMediaCached(mediaUrl, mediaMimeType)) {
+            mediasCache.createTmpMediaFile(mediaUrl, mediaMimeType, encryptedFileInfo, new SimpleApiCallback<File>() {
+                @Override
+                public void onSuccess(File file) {
+                    // sanity check
+                    if (null == file) {
+                        return;
+                    }
+
+                    if ((menuAction == ACTION_VECTOR_SAVE) || (menuAction == ACTION_VECTOR_OPEN)) {
+                        CommonActivityUtils.saveMediaIntoDownloads(getActivity(), file, trimmedFileName, mediaMimeType, new SimpleApiCallback<String>() {
+                            @Override
+                            public void onSuccess(String savedMediaPath) {
+                                if (null != savedMediaPath) {
+                                    if (menuAction == ACTION_VECTOR_SAVE) {
+                                        Toast.makeText(getActivity(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
+                                    } else {
+                                        CommonActivityUtils.openMedia(getActivity(), savedMediaPath, mediaMimeType);
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        if (null != trimmedFileName) {
+                            File dstFile = new File(file.getParent(), trimmedFileName);
+
+                            if (dstFile.exists()) {
+                                dstFile.delete();
+                            }
+
+                            file.renameTo(dstFile);
+                            file = dstFile;
+                        }
+
+                        // shared / forward
+                        Uri mediaUri = null;
+                        try {
+                            mediaUri = VectorContentProvider.absolutePathToUri(getActivity(), file.getAbsolutePath());
+                        } catch (Exception e) {
+                            Log.e(LOG_TAG, "onMediaAction VectorContentProvider.absolutePathToUri: " + e.getMessage());
+                        }
+
+
+                        if (null != mediaUri) {
+                            final Intent sendIntent = new Intent();
+                            sendIntent.setAction(Intent.ACTION_SEND);
+                            sendIntent.setType(mediaMimeType);
+                            sendIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
+
+                            if (menuAction == ACTION_VECTOR_FORWARD) {
+                                CommonActivityUtils.sendFilesTo(getActivity(), sendIntent);
                             } else {
-                                CommonActivityUtils.openMedia(getActivity(), savedMediaPath, mediaMimeType);
+                                startActivity(sendIntent);
                             }
                         }
                     }
-                });
-            } else {
-                // shared / forward
-                Uri mediaUri = null;
-
-                File renamedFile = file;
-
-                if (!TextUtils.isEmpty(filename)) {
-                    try {
-                        InputStream fin = new FileInputStream(file);
-                        String tmpUrl = mediasCache.saveMedia(fin, filename, mediaMimeType);
-
-                        if (null != tmpUrl) {
-                            renamedFile = mediasCache.mediaCacheFile(tmpUrl, mediaMimeType);
-                        }
-                    } catch (Exception e) {
-                        Log.e(LOG_TAG, "onMediaAction shared / forward failed : " + e.getLocalizedMessage());
-                    }
                 }
-
-                if (null != renamedFile) {
-                    try {
-                        mediaUri = VectorContentProvider.absolutePathToUri(getActivity(), renamedFile.getAbsolutePath());
-                    } catch (Exception e) {
-                        Log.e(LOG_TAG, "onMediaAction VectorContentProvider.absolutePathToUri: " + e.getLocalizedMessage());
-                    }
-                }
-
-                if (null != mediaUri) {
-                    final Intent sendIntent = new Intent();
-                    sendIntent.setAction(Intent.ACTION_SEND);
-                    sendIntent.setType(mediaMimeType);
-                    sendIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
-
-                    if (menuAction == ACTION_VECTOR_FORWARD) {
-                        CommonActivityUtils.sendFilesTo(getActivity(), sendIntent);
-                    } else {
-                        startActivity(sendIntent);
-                    }
-                }
-            }
+            });
         } else {
             // else download it
-            final String downloadId = mediasCache.downloadMedia(getActivity().getApplicationContext(), mSession.getHomeserverConfig(), mediaUrl, mediaMimeType, encryptedFileInfo);
+            final String downloadId = mediasCache.downloadMedia(getActivity().getApplicationContext(), mSession.getHomeServerConfig(), mediaUrl, mediaMimeType, encryptedFileInfo);
             mAdapter.notifyDataSetChanged();
 
             if (null != downloadId) {
@@ -837,7 +859,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                             VectorMessageListFragment.this.getActivity().runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    onMediaAction(menuAction, mediaUrl, mediaMimeType, filename, encryptedFileInfo);
+                                    onMediaAction(menuAction, mediaUrl, mediaMimeType, trimmedFileName, encryptedFileInfo);
                                 }
                             });
                         }
@@ -853,8 +875,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
      */
     @Override
     public boolean isDisplayAllEvents() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
-        return preferences.getBoolean(getString(R.string.settings_key_display_all_events), false);
+        return  PreferencesManager.displayAllEvents(getActivity());
     }
 
     private void setViewVisibility(View view, int visibility) {
@@ -900,7 +921,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     /**
      * @return the image and video messages list
      */
-    protected ArrayList<SlidableMediaInfo> listSlidableMessages() {
+    ArrayList<SlidableMediaInfo> listSlidableMessages() {
         ArrayList<SlidableMediaInfo> res = new ArrayList<>();
 
         for (int position = 0; position < mAdapter.getCount(); position++) {
@@ -917,7 +938,6 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 info.mRotationAngle = imageMessage.getRotation();
                 info.mOrientation = imageMessage.getOrientation();
                 info.mMimeType = imageMessage.getMimeType();
-                info.mIdentifier = row.getEvent().eventId;
                 info.mEncryptedFileInfo = imageMessage.file;
                 res.add(info);
             } else if (Message.MSGTYPE_VIDEO.equals(message.msgtype)) {
@@ -927,7 +947,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 info.mFileName = videoMessage.body;
                 info.mMediaUrl = videoMessage.getUrl();
                 info.mThumbnailUrl = (null != videoMessage.info) ? videoMessage.info.thumbnail_url : null;
-                info.mMimeType = videoMessage.getVideoMimeType();
+                info.mMimeType = videoMessage.getMimeType();
                 info.mEncryptedFileInfo = videoMessage.file;
                 res.add(info);
             }
@@ -943,7 +963,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
      * @param mediaMessage      the imageMessage
      * @return the imageMessage position. -1 if not found.
      */
-    protected int getMediaMessagePosition(ArrayList<SlidableMediaInfo> mediaMessagesList, Message mediaMessage) {
+    int getMediaMessagePosition(ArrayList<SlidableMediaInfo> mediaMessagesList, Message mediaMessage) {
         String url = null;
 
         if (mediaMessage instanceof ImageMessage) {
@@ -1004,7 +1024,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     Intent viewImageIntent = new Intent(getActivity(), VectorMediasViewerActivity.class);
 
                     viewImageIntent.putExtra(VectorMediasViewerActivity.EXTRA_MATRIX_ID, mSession.getCredentials().userId);
-                    viewImageIntent.putExtra(VectorMediasViewerActivity.KEY_THUMBNAIL_WIDTH, mAdapter.getMaxThumbnailWith());
+                    viewImageIntent.putExtra(VectorMediasViewerActivity.KEY_THUMBNAIL_WIDTH, mAdapter.getMaxThumbnailWidth());
                     viewImageIntent.putExtra(VectorMediasViewerActivity.KEY_THUMBNAIL_HEIGHT, mAdapter.getMaxThumbnailHeight());
                     viewImageIntent.putExtra(VectorMediasViewerActivity.KEY_INFO_LIST, mediaMessagesList);
                     viewImageIntent.putExtra(VectorMediasViewerActivity.KEY_INFO_LIST_INDEX, listPosition);
@@ -1102,6 +1122,22 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     }
 
     @Override
+    public void onGroupFlairClick(String userId, List<String> groupIds) {
+        try {
+            FragmentManager fm = getActivity().getSupportFragmentManager();
+
+            VectorUserGroupsDialogFragment fragment = (VectorUserGroupsDialogFragment) fm.findFragmentByTag(TAG_FRAGMENT_USER_GROUPS_DIALOG);
+            if (fragment != null) {
+                fragment.dismissAllowingStateLoss();
+            }
+            fragment = VectorUserGroupsDialogFragment.newInstance(mSession.getMyUserId(), userId, groupIds);
+            fragment.show(fm, TAG_FRAGMENT_USER_GROUPS_DIALOG);
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "## onGroupFlairClick() failed " + e.getMessage());
+        }
+    }
+
+    @Override
     public void onURLClick(Uri uri) {
         try {
             if (null != uri) {
@@ -1173,6 +1209,15 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         }
     }
 
+    @Override
+    public void onGroupIdClick(String groupId) {
+        try {
+            onURLClick(Uri.parse(VectorUtils.getPermalink(groupId, null)));
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage());
+        }
+    }
+
     private int mInvalidIndexesCount = 0;
 
     @Override
@@ -1201,33 +1246,24 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         }
     }
 
-
-    private final HashMap<String, Object> mBingRulesByEventId = new HashMap<>();
+    private final HashMap<String, Boolean> mHighlightStatusByEventId = new HashMap<>();
 
     @Override
     public boolean shouldHighlightEvent(Event event) {
-        String eventId = event.eventId;
-
-        // cache the dedicated rule because it is slow to find them out
-        Object ruleAsVoid = mBingRulesByEventId.get(eventId);
-
-        if (null != ruleAsVoid) {
-            if (ruleAsVoid instanceof BingRule) {
-                return ((BingRule) ruleAsVoid).shouldHighlight();
-            }
+        // sanity check
+        if ((null == event) || (null == event.eventId)) {
             return false;
         }
 
-        boolean res = false;
+        String eventId = event.eventId;
+        Boolean status = mHighlightStatusByEventId.get(eventId);
 
-        BingRule rule = mSession.getDataHandler().getBingRulesManager().fulfilledBingRule(event);
-
-        if (null != rule) {
-            res = rule.shouldHighlight();
-            mBingRulesByEventId.put(eventId, rule);
-        } else {
-            mBingRulesByEventId.put(eventId, eventId);
+        if (null != status) {
+            return status;
         }
+
+        boolean res = (null != mSession.getDataHandler().getBingRulesManager().fulfilledHighlightBingRule(event));
+        mHighlightStatusByEventId.put(eventId, res);
 
         return res;
     }

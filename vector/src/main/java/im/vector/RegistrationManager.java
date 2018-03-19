@@ -20,7 +20,7 @@ import android.content.Context;
 import android.support.annotation.StringRes;
 import android.text.TextUtils;
 
-import org.matrix.androidsdk.HomeserverConnectionConfig;
+import org.matrix.androidsdk.HomeServerConnectionConfig;
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
@@ -28,7 +28,7 @@ import org.matrix.androidsdk.rest.client.LoginRestClient;
 import org.matrix.androidsdk.rest.client.ProfileRestClient;
 import org.matrix.androidsdk.rest.client.ThirdPidRestClient;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.ThreePid;
+import org.matrix.androidsdk.rest.model.pid.ThreePid;
 import org.matrix.androidsdk.rest.model.login.Credentials;
 import org.matrix.androidsdk.rest.model.login.LoginFlow;
 import org.matrix.androidsdk.rest.model.login.RegistrationFlowResponse;
@@ -55,10 +55,10 @@ public class RegistrationManager {
 
     private static volatile RegistrationManager sInstance;
 
-    private static String ERROR_MISSING_STAGE = "ERROR_MISSING_STAGE";
-    private static String ERROR_EMPTY_USER_ID = "ERROR_EMPTY_USER_ID";
+    private static final String ERROR_MISSING_STAGE = "ERROR_MISSING_STAGE";
+    private static final String ERROR_EMPTY_USER_ID = "ERROR_EMPTY_USER_ID";
 
-    private static String NEXTLINK_BASE_URL = "https://app.rios.org.br";
+    private static final String NEXTLINK_BASE_URL = "https://app.rios.org.br";
 
     // JSON keys used for registration request
     private static final String JSON_KEY_CLIENT_SECRET = "client_secret";
@@ -71,7 +71,7 @@ public class RegistrationManager {
     private static final String JSON_KEY_PUBLIC_KEY = "public_key";
 
     // List of stages supported by the app
-    private static List<String> VECTOR_SUPPORTED_STAGES = Arrays.asList(
+    private static final List<String> VECTOR_SUPPORTED_STAGES = Arrays.asList(
             LoginRestClient.LOGIN_FLOW_TYPE_PASSWORD,
             LoginRestClient.LOGIN_FLOW_TYPE_DUMMY,
             LoginRestClient.LOGIN_FLOW_TYPE_EMAIL_IDENTITY,
@@ -79,7 +79,7 @@ public class RegistrationManager {
             LoginRestClient.LOGIN_FLOW_TYPE_RECAPTCHA);
 
     // Config
-    private HomeserverConnectionConfig mHsConfig;
+    private HomeServerConnectionConfig mHsConfig;
     private LoginRestClient mLoginRestClient;
     private ThirdPidRestClient mThirdPidRestClient;
     private ProfileRestClient mProfileRestClient;
@@ -152,7 +152,7 @@ public class RegistrationManager {
      *
      * @param hsConfig
      */
-    public void setHsConfig(final HomeserverConnectionConfig hsConfig) {
+    public void setHsConfig(final HomeServerConnectionConfig hsConfig) {
         mHsConfig = hsConfig;
         mLoginRestClient = null;
         mThirdPidRestClient = null;
@@ -222,6 +222,22 @@ public class RegistrationManager {
     }
 
     /**
+     * @return true if there is a password flow.
+     */
+    private boolean isPasswordBasedFlowSupported() {
+        if ((null != mRegistrationResponse) && (null != mRegistrationResponse.flows)) {
+            for (LoginFlow flow : mRegistrationResponse.flows) {
+                if (TextUtils.equals(flow.type, LoginRestClient.LOGIN_FLOW_TYPE_PASSWORD) ||
+                        ((null != flow.stages) && flow.stages.contains(LoginRestClient.LOGIN_FLOW_TYPE_PASSWORD))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Make the registration request with params depending on singleton values
      *
      * @param context
@@ -264,10 +280,24 @@ public class RegistrationManager {
                 registrationType = LoginRestClient.LOGIN_FLOW_TYPE_DUMMY;
                 authParams = new HashMap<>();
                 authParams.put(JSON_KEY_TYPE, LoginRestClient.LOGIN_FLOW_TYPE_DUMMY);
-            } else {
+            } else if (isPasswordBasedFlowSupported()) {
+                // never has been tested
                 registrationType = LoginRestClient.LOGIN_FLOW_TYPE_PASSWORD;
                 authParams = new HashMap<>();
                 authParams.put(JSON_KEY_TYPE, LoginRestClient.LOGIN_FLOW_TYPE_PASSWORD);
+                authParams.put(JSON_KEY_SESSION, mRegistrationResponse.session);
+
+                if (null != mUsername) {
+                    authParams.put("username", mUsername);
+                }
+
+                if (null != mPassword) {
+                    authParams.put("password", mPassword);
+                }
+            } else {
+                // others
+                registrationType = "";
+                authParams = new HashMap<>();
             }
 
             if (TextUtils.equals(registrationType, LoginRestClient.LOGIN_FLOW_TYPE_MSISDN)
@@ -307,7 +337,7 @@ public class RegistrationManager {
                 @Override
                 public void onRegistrationFailed(String message) {
                     if (TextUtils.equals(ERROR_MISSING_STAGE, message)
-                            && (mPhoneNumber == null || isCompleted(LoginRestClient.LOGIN_FLOW_TYPE_MSISDN))){
+                            && (mPhoneNumber == null || isCompleted(LoginRestClient.LOGIN_FLOW_TYPE_MSISDN))) {
                         if (mEmail != null && !isCompleted(LoginRestClient.LOGIN_FLOW_TYPE_EMAIL_IDENTITY)) {
                             attemptRegistration(context, listener);
                         } else {
@@ -405,7 +435,7 @@ public class RegistrationManager {
      * @param stage
      * @return true if completed
      */
-    public boolean isCompleted(final String stage) {
+    private boolean isCompleted(final String stage) {
         return mRegistrationResponse != null && mRegistrationResponse.completed != null && mRegistrationResponse.completed.contains(stage);
     }
 
@@ -425,7 +455,7 @@ public class RegistrationManager {
      * @param stage
      * @return true if required
      */
-    public boolean isRequired(final String stage) {
+    private boolean isRequired(final String stage) {
         return mRequiredStages.contains(stage);
     }
 
@@ -450,7 +480,7 @@ public class RegistrationManager {
     /**
      * @return true if captcha is mandatory for registration and not completed yet
      */
-    public boolean isCaptchaRequired() {
+    private boolean isCaptchaRequired() {
         return mRegistrationResponse != null
                 && isRequired(LoginRestClient.LOGIN_FLOW_TYPE_RECAPTCHA)
                 && (mRegistrationResponse.completed == null || !mRegistrationResponse.completed.contains(LoginRestClient.LOGIN_FLOW_TYPE_RECAPTCHA));
@@ -872,7 +902,8 @@ public class RegistrationManager {
      */
     private void register(final Context context, final RegistrationParams params, final InternalRegistrationListener listener) {
         if (getLoginRestClient() != null) {
-            mLoginRestClient.register(params, new SimpleApiCallback<Credentials>() {
+            params.initial_device_display_name = context.getString(R.string.login_mobile_device);
+            mLoginRestClient.register(params, new UnrecognizedCertApiCallback<Credentials>(mHsConfig) {
                 @Override
                 public void onSuccess(Credentials credentials) {
                     if (TextUtils.isEmpty(credentials.userId)) {
@@ -895,41 +926,19 @@ public class RegistrationManager {
                                 MXSession session = Matrix.getInstance(context).createSession(mHsConfig);
                                 Matrix.getInstance(context).addSession(session);
                             }
+
                             listener.onRegistrationSuccess();
                         }
                     }
                 }
 
                 @Override
-                public void onNetworkError(final Exception e) {
-                    UnrecognizedCertificateException unrecCertEx = CertUtil.getCertificateException(e);
-                    if (unrecCertEx != null) {
-                        final Fingerprint fingerprint = unrecCertEx.getFingerprint();
-                        Log.d(LOG_TAG, "Found fingerprint: SHA-256: " + fingerprint.getBytesAsHexString());
-
-                        UnrecognizedCertHandler.show(mHsConfig, fingerprint, false, new UnrecognizedCertHandler.Callback() {
-                            @Override
-                            public void onAccept() {
-                                register(context, params, listener);
-                            }
-
-                            @Override
-                            public void onIgnore() {
-                                listener.onRegistrationFailed(e.getLocalizedMessage());
-                            }
-
-                            @Override
-                            public void onReject() {
-                                listener.onRegistrationFailed(e.getLocalizedMessage());
-                            }
-                        });
-                    } else {
-                        listener.onRegistrationFailed(e.getLocalizedMessage());
-                    }
+                public void onAcceptedCert() {
+                    register(context, params, listener);
                 }
 
                 @Override
-                public void onUnexpectedError(Exception e) {
+                public void onTLSOrNetworkError(final Exception e) {
                     listener.onRegistrationFailed(e.getLocalizedMessage());
                 }
 
@@ -978,6 +987,7 @@ public class RegistrationManager {
 
     public interface ThreePidRequestListener {
         void onThreePidRequested(ThreePid pid);
+
         void onThreePidRequestFailed(@StringRes int errorMessageRes);
     }
 

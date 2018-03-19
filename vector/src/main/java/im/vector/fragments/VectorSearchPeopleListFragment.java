@@ -54,12 +54,6 @@ public class VectorSearchPeopleListFragment extends Fragment {
     private ExpandableListView mPeopleListView;
     private VectorParticipantsAdapter mAdapter;
 
-    // pending requests
-    // a request might be called whereas the fragment is not initialized
-    // wait the resume to perform the search
-    private String mPendingPattern;
-    private MatrixMessageListFragment.OnSearchResultListener mPendingSearchResultListener;
-
     // contacts manager listener
     // detect if a contact is a matrix user
     private final ContactsManager.ContactsManagerListener mContactsListener = new ContactsManager.ContactsManagerListener() {
@@ -151,7 +145,7 @@ public class VectorSearchPeopleListFragment extends Fragment {
         String matrixId = args.getString(ARG_MATRIX_ID);
         mSession = Matrix.getInstance(getActivity()).getSession(matrixId);
 
-        if (null == mSession) {
+        if ((null == mSession) || !mSession.isAlive()) {
             throw new RuntimeException("Must have valid default MXSession.");
         }
 
@@ -210,8 +204,6 @@ public class VectorSearchPeopleListFragment extends Fragment {
      */
     public void searchPattern(final String pattern, final MatrixMessageListFragment.OnSearchResultListener onSearchResultListener) {
         if (null == mPeopleListView) {
-            mPendingPattern = pattern;
-            mPendingSearchResultListener = onSearchResultListener;
             return;
         }
 

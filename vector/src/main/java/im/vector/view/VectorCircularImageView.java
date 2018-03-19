@@ -28,14 +28,21 @@ import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
 import android.support.v4.util.LruCache;
 import android.util.AttributeSet;
+import android.util.Pair;
 
 import org.matrix.androidsdk.util.Log;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Display a circular image.
  */
 public class VectorCircularImageView extends android.support.v7.widget.AppCompatImageView {
-    private static final String LOG_TAG = "VCirImageView";
+    private static final String LOG_TAG = VectorCircularImageView.class.getSimpleName();
 
     public VectorCircularImageView(Context context) {
         super(context);
@@ -54,7 +61,7 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
         super.setImageDrawable(drawable);
 
         if ((null != drawable) && (drawable instanceof BitmapDrawable)) {
-            final Bitmap b = ((BitmapDrawable)drawable).getBitmap();
+            final Bitmap b = ((BitmapDrawable) drawable).getBitmap();
 
             if (null != b) {
                 this.post(new Runnable() {
@@ -69,9 +76,9 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
 
     // We use a lru cache to reduce the screen loading time.
     // Create a RoundedBitmapDrawable might be slow
-    static LruCache<String, RoundedBitmapDrawable> mCache = new LruCache<String, RoundedBitmapDrawable>(4 * 1024 * 1024) {
+    private static final LruCache<String, RoundedBitmapDrawable> mCache = new LruCache<String, RoundedBitmapDrawable>(4 * 1024 * 1024) {
         @Override
-        protected int sizeOf (String key, RoundedBitmapDrawable drawable) {
+        protected int sizeOf(String key, RoundedBitmapDrawable drawable) {
             return drawable.getBitmap().getRowBytes() * drawable.getBitmap().getHeight(); // size in bytes
         }
     };
@@ -81,9 +88,21 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
     private static android.os.Handler mConversionImagesThreadHandler = null;
     private static Handler mUIHandler = null;
 
+    private static Map<String, ArrayList<Pair<Object, VectorCircularImageView>>> mPendingConversion = new HashMap<>();
+
+    /**
+     * Update the image drawable with the rounded bitmap.
+     *
+     * @param cachedDrawable the bitmap drawable.
+     */
+    protected void setCircularImageDrawable(final RoundedBitmapDrawable cachedDrawable) {
+        super.setImageDrawable(cachedDrawable);
+    }
+
     /**
      * Update the bitmap.
      * The bitmap is first squared before adding corners
+     *
      * @param bm the new bitmap
      */
     public void setImageBitmap(final Bitmap bm) {
@@ -98,7 +117,7 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
             // Create a RoundedBitmapDrawable might be slow
             RoundedBitmapDrawable cachedDrawable = mCache.get(key);
             if (null != cachedDrawable) {
-                super.setImageDrawable(cachedDrawable);
+                setCircularImageDrawable(cachedDrawable);
                 return;
             }
 
@@ -108,7 +127,16 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
                 mConversionImagesThreadHandler = new android.os.Handler(mConversionImagesThread.getLooper());
                 mUIHandler = new Handler(Looper.getMainLooper());
             }
-            
+
+            // there is a conversion in progress
+            if (mPendingConversion.containsKey(key)) {
+                mPendingConversion.get(key).add(new Pair<>(getTag(), this));
+                return;
+            }
+
+            // build a list
+            mPendingConversion.put(key, new ArrayList(Arrays.asList(new Pair<>(getTag(), this))));
+
             mConversionImagesThreadHandler.post(new Runnable() {
                 @Override
                 public void run() {
@@ -118,7 +146,7 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
                         // nothing to do
                     }
                     // larger than high
-                    else if (width > height){
+                    else if (width > height) {
                         try {
                             squareBitmap = Bitmap.createBitmap(
                                     squareBitmap,
@@ -156,7 +184,16 @@ public class VectorCircularImageView extends android.support.v7.widget.AppCompat
                             public void run() {
                                 // save it in a cache
                                 mCache.put(key, drawable);
-                                VectorCircularImageView.this.setImageDrawable(drawable);
+
+                                List<Pair<Object, VectorCircularImageView>> pairs = mPendingConversion.get(key);
+                                mPendingConversion.remove(key);
+
+                                for (Pair<Object, VectorCircularImageView> pair : pairs) {
+                                    // update only if the tag is the same
+                                    if (pair.second.getTag() == pair.first) {
+                                        pair.second.setCircularImageDrawable(drawable);
+                                    }
+                                }
                             }
                         });
                     } catch (Exception e) {

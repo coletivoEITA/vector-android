@@ -43,7 +43,7 @@ import android.os.Looper;
 import android.os.Parcelable;
 import android.preference.PreferenceManager;
 import android.support.annotation.AttrRes;
-import android.support.design.widget.Snackbar;
+import android.support.annotation.ColorInt;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
@@ -52,7 +52,6 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.graphics.drawable.DrawableCompat;
 import android.text.TextUtils;
 import android.util.Pair;
-import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -62,13 +61,11 @@ import android.widget.Toast;
 
 import org.matrix.androidsdk.MXDataHandler;
 import org.matrix.androidsdk.MXSession;
-import org.matrix.androidsdk.call.IMXCall;
 import org.matrix.androidsdk.crypto.data.MXDeviceInfo;
 import org.matrix.androidsdk.crypto.data.MXUsersDevicesMap;
 import org.matrix.androidsdk.data.Room;
 import org.matrix.androidsdk.data.RoomPreviewData;
 import org.matrix.androidsdk.data.RoomSummary;
-import org.matrix.androidsdk.data.store.IMXStore;
 import org.matrix.androidsdk.db.MXMediasCache;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
@@ -111,15 +108,7 @@ import me.leolin.shortcutbadger.ShortcutBadger;
  * Contains useful functions which are called in multiple activities.
  */
 public class CommonActivityUtils {
-    private static final String LOG_TAG = "CommonActivityUtils";
-
-    /**
-     * Mime types
-     **/
-    public static final String MIME_TYPE_JPEG = "image/jpeg";
-    public static final String MIME_TYPE_JPG = "image/jpg";
-    public static final String MIME_TYPE_IMAGE_ALL = "image/*";
-    public static final String MIME_TYPE_ALL_CONTENT = "*/*";
+    private static final String LOG_TAG = CommonActivityUtils.class.getSimpleName();
 
     /**
      * Schemes
@@ -158,7 +147,7 @@ public class CommonActivityUtils {
     // Android M permission request code management
     private static final boolean PERMISSIONS_GRANTED = true;
     private static final boolean PERMISSIONS_DENIED = !PERMISSIONS_GRANTED;
-    public static final int PERMISSION_BYPASSED = 0x0;
+    private static final int PERMISSION_BYPASSED = 0x0;
     public static final int PERMISSION_CAMERA = 0x1;
     private static final int PERMISSION_WRITE_EXTERNAL_STORAGE = 0x1 << 1;
     private static final int PERMISSION_RECORD_AUDIO = 0x1 << 2;
@@ -171,15 +160,15 @@ public class CommonActivityUtils {
     public static final int REQUEST_CODE_PERMISSION_ROOM_DETAILS = PERMISSION_CAMERA;
     public static final int REQUEST_CODE_PERMISSION_VIDEO_RECORDING = PERMISSION_CAMERA | PERMISSION_RECORD_AUDIO;
     public static final int REQUEST_CODE_PERMISSION_HOME_ACTIVITY = PERMISSION_WRITE_EXTERNAL_STORAGE;
-    public static final int REQUEST_CODE_PERMISSION_BY_PASS = PERMISSION_BYPASSED;
+    private static final int REQUEST_CODE_PERMISSION_BY_PASS = PERMISSION_BYPASSED;
 
     /**
      * Logout a sessions list
      *
-     * @param context the context
-     * @param sessions the sessions list
-     * @param clearCredentials  true to clear the credentials
-     * @param callback the asynchronous callback
+     * @param context          the context
+     * @param sessions         the sessions list
+     * @param clearCredentials true to clear the credentials
+     * @param callback         the asynchronous callback
      */
     public static void logout(Context context, List<MXSession> sessions, boolean clearCredentials, final SimpleApiCallback<Void> callback) {
         logout(context, sessions.iterator(), clearCredentials, callback);
@@ -188,10 +177,10 @@ public class CommonActivityUtils {
     /**
      * Internal method to logout a sessions list
      *
-     * @param context the context
-     * @param sessions the sessions iterator
-     * @param clearCredentials  true to clear the credentials
-     * @param callback the asynchronous callback
+     * @param context          the context
+     * @param sessions         the sessions iterator
+     * @param clearCredentials true to clear the credentials
+     * @param callback         the asynchronous callback
      */
     private static void logout(final Context context, final Iterator<MXSession> sessions, final boolean clearCredentials, final SimpleApiCallback<Void> callback) {
         if (!sessions.hasNext()) {
@@ -207,9 +196,13 @@ public class CommonActivityUtils {
         if (session.isAlive()) {
             // stop the service
             EventStreamService eventStreamService = EventStreamService.getInstance();
-            ArrayList<String> matrixIds = new ArrayList<>();
-            matrixIds.add(session.getMyUserId());
-            eventStreamService.stopAccounts(matrixIds);
+
+            // reported by a rageshake
+            if (null != eventStreamService) {
+                ArrayList<String> matrixIds = new ArrayList<>();
+                matrixIds.add(session.getMyUserId());
+                eventStreamService.stopAccounts(matrixIds);
+            }
 
             // Publish to the server that we're now offline
             MyPresenceManager.getInstance(context, session).advertiseOffline();
@@ -381,30 +374,24 @@ public class CommonActivityUtils {
         }
 
         // clear the preferences
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-
-        String theme = ThemeUtils.getApplicationTheme(context);
-        String homeServer = preferences.getString(LoginActivity.HOME_SERVER_URL_PREF, context.getResources().getString(R.string.default_hs_server_url));
-        String identityServer = preferences.getString(LoginActivity.IDENTITY_SERVER_URL_PREF, context.getResources().getString(R.string.default_identity_server_url));
-        Boolean useGa = PreferencesManager.useGA(context);
-
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.clear();
-        editor.putString(LoginActivity.HOME_SERVER_URL_PREF, homeServer);
-        editor.putString(LoginActivity.IDENTITY_SERVER_URL_PREF, identityServer);
-        editor.commit();
-
-        if (null != useGa) {
-            PreferencesManager.setUseGA(context, useGa);
-        }
-
-        ThemeUtils.setApplicationTheme(context, theme);
+        PreferencesManager.clearPreferences(context);
 
         // reset the GCM
         Matrix.getInstance(context).getSharedGCMRegistrationManager().resetGCMRegistration();
         // clear the preferences when the application goes to the login screen.
         if (goToLoginPage) {
+            // display a dummy activity until the logout is done
             Matrix.getInstance(context).getSharedGCMRegistrationManager().clearPreferences();
+
+            if (null != activity) {
+                // go to login page
+                activity.startActivity(new Intent(activity, LoggingOutActivity.class));
+                activity.finish();
+            } else {
+                Intent intent = new Intent(context, LoggingOutActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                context.startActivity(intent);
+            }
         }
 
         // clear credentials
@@ -424,10 +411,11 @@ public class CommonActivityUtils {
                 MXMediasCache.clearThumbnailsCache(context);
 
                 if (goToLoginPage) {
-                    if (null != activity) {
+                    Activity activeActivity = VectorApp.getCurrentActivity();
+                    if (null != activeActivity) {
                         // go to login page
-                        activity.startActivity(new Intent(activity, LoginActivity.class));
-                        activity.finish();
+                        activeActivity.startActivity(new Intent(activeActivity, LoginActivity.class));
+                        activeActivity.finish();
                     } else {
                         Intent intent = new Intent(context, LoginActivity.class);
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -493,15 +481,18 @@ public class CommonActivityUtils {
     private static void sendEventStreamAction(Context context, EventStreamService.StreamAction action) {
         Context appContext = context.getApplicationContext();
 
-        Log.d(LOG_TAG, "sendEventStreamAction " + action);
-
         if (!isUserLogout(appContext)) {
-            // Fix https://github.com/vector-im/vector-android/issues/230
-            // Only start the service if a session is in progress, otherwise
-            // starting the service is useless
-            Intent killStreamService = new Intent(appContext, EventStreamService.class);
-            killStreamService.putExtra(EventStreamService.EXTRA_STREAM_ACTION, action.ordinal());
-            appContext.startService(killStreamService);
+            Intent eventStreamService = new Intent(appContext, EventStreamService.class);
+
+            if ((action == EventStreamService.StreamAction.CATCHUP) && (EventStreamService.isStopped())) {
+                Log.d(LOG_TAG, "sendEventStreamAction : auto restart");
+                eventStreamService.putExtra(EventStreamService.EXTRA_AUTO_RESTART_ACTION, EventStreamService.EXTRA_AUTO_RESTART_ACTION);
+            } else {
+                Log.d(LOG_TAG, "sendEventStreamAction " + action);
+                eventStreamService.putExtra(EventStreamService.EXTRA_STREAM_ACTION, action.ordinal());
+            }
+
+            appContext.startService(eventStreamService);
         } else {
             Log.d(LOG_TAG, "## sendEventStreamAction(): \"" + action + "\" action not sent - user logged out");
         }
@@ -568,11 +559,12 @@ public class CommonActivityUtils {
         // the events stream service is launched
         // either the application has never be launched
         // or the service has been killed on low memory
-        if (EventStreamService.getInstance() == null) {
+        if (EventStreamService.isStopped()) {
             ArrayList<String> matrixIds = new ArrayList<>();
             Collection<MXSession> sessions = Matrix.getInstance(context.getApplicationContext()).getSessions();
 
             if ((null != sessions) && (sessions.size() > 0)) {
+                GcmRegistrationManager gcmRegistrationManager = Matrix.getInstance(context).getSharedGCMRegistrationManager();
                 Log.e(LOG_TAG, "## startEventStreamService() : restart EventStreamService");
 
                 for (MXSession session : sessions) {
@@ -589,6 +581,9 @@ public class CommonActivityUtils {
                             session.checkCrypto();
                         }
 
+                        session.setSyncDelay(gcmRegistrationManager.isBackgroundSyncAllowed() ? gcmRegistrationManager.getBackgroundSyncDelay() : 0);
+                        session.setSyncTimeout(gcmRegistrationManager.getBackgroundSyncTimeOut());
+
                         // session to activate
                         matrixIds.add(session.getCredentials().userId);
                     }
@@ -601,6 +596,10 @@ public class CommonActivityUtils {
                     intent.putExtra(EventStreamService.EXTRA_STREAM_ACTION, EventStreamService.StreamAction.START.ordinal());
                     context.startService(intent);
                 }
+            }
+
+            if (null != EventStreamService.getInstance()) {
+                EventStreamService.getInstance().refreshStatusNotification();
             }
         }
     }
@@ -709,10 +708,10 @@ public class CommonActivityUtils {
             finalPermissionsListToBeGranted = permissionsListToBeGranted;
 
             // if some permissions were already denied: display a dialog to the user before asking again..
-            if(!permissionListAlreadyDenied.isEmpty()) {
+            if (!permissionListAlreadyDenied.isEmpty()) {
                 if (null != resource) {
                     // add the user info text to be displayed to explain why the permission is required by the App
-                    if (aPermissionsToBeGrantedBitMap == REQUEST_CODE_PERMISSION_VIDEO_IP_CALL || aPermissionsToBeGrantedBitMap == REQUEST_CODE_PERMISSION_AUDIO_IP_CALL){
+                    if (aPermissionsToBeGrantedBitMap == REQUEST_CODE_PERMISSION_VIDEO_IP_CALL || aPermissionsToBeGrantedBitMap == REQUEST_CODE_PERMISSION_AUDIO_IP_CALL) {
                         // Permission request for VOIP call
                         if (permissionListAlreadyDenied.contains(Manifest.permission.CAMERA)
                                 && permissionListAlreadyDenied.contains(Manifest.permission.RECORD_AUDIO)) {
@@ -760,7 +759,7 @@ public class CommonActivityUtils {
 
                 // display the dialog with the info text
                 AlertDialog.Builder permissionsInfoDialog = new AlertDialog.Builder(aCallingActivity);
-                if(null != resource) {
+                if (null != resource) {
                     permissionsInfoDialog.setTitle(R.string.permissions_rationale_popup_title);
                 }
 
@@ -864,10 +863,9 @@ public class CommonActivityUtils {
      *
      * @param aPermissionsToBeGrantedBitMap
      * @param fragment
-     * @return true if the permissions are granted (synchronous flow), false otherwise (asynchronous flow)
      */
-    public static boolean checkPermissions(final int aPermissionsToBeGrantedBitMap, final Fragment fragment) {
-        return checkPermissions(aPermissionsToBeGrantedBitMap, fragment.getActivity(), fragment);
+    public static void checkPermissions(final int aPermissionsToBeGrantedBitMap, final Fragment fragment) {
+        checkPermissions(aPermissionsToBeGrantedBitMap, fragment.getActivity(), fragment);
     }
 
     /**
@@ -1257,72 +1255,6 @@ public class CommonActivityUtils {
     }
 
     /**
-     * Return the 1:1 room with the most recent message, that the searched user and the current
-     * logged user have joined.
-     * Among the list of the 1:1 rooms, joined by the user, the room with the most recent
-     * posted message is chosen to be returned.
-     *
-     * @param aSession        session
-     * @param aSearchedUserId the searched user ID
-     * @return 1:1 room joined by the user with the most recent message, null otherwise
-     */
-    private static Room findLatestOneToOneRoom(final MXSession aSession, final String aSearchedUserId) {
-        long serverTimeStamp = 0, newServerTimeStamp;
-        RoomSummary summary;
-        Room mostRecentRoomRetValue = null;
-        IMXStore mStore = aSession.getDataHandler().getStore();
-
-        // get all the "one to one" rooms where the user has joined
-        ArrayList<Room> roomsFoundList = findOneToOneRoomList(aSession, aSearchedUserId);
-
-        // parse all the 1:1 rooms and take the one with the most recent message.
-        if (!roomsFoundList.isEmpty()) {
-            for (Room room : roomsFoundList) {
-
-                summary = mStore.getSummary(room.getRoomId());
-                try {
-                    // test on the most recent time stamp
-                    if ((null != summary) && ((newServerTimeStamp = summary.getLatestReceivedEvent().getOriginServerTs()) > serverTimeStamp)) {
-                        mostRecentRoomRetValue = room;
-                        serverTimeStamp = newServerTimeStamp;
-                    }
-                } catch (Exception ex) {
-                    Log.e(LOG_TAG, "## findLatestOneToOneRoom(): Exception Msg=" + ex.getMessage());
-                }
-            }
-        }
-
-        return mostRecentRoomRetValue;
-    }
-
-    /**
-     * Check if the room is a 1:1 room and if the searched user has joined this room.
-     * The user ID is searched in the room only if the room is a 1:1 room.
-     * This method is useful to check if we can create a new 1:1 room when it is
-     * asked from a already existing room (see {@link VectorMemberDetailsActivity#ITEM_ACTION_START_CHAT}).
-     *
-     * @param aRoom           room to be checked
-     * @param aSearchedUserId the user ID to be searched in the room
-     * @return true if the room is a 1:1 room where the user ID is present, false otherwise
-     */
-    public static boolean isOneToOneRoomJoinedByUserId(final Room aRoom, final String aSearchedUserId) {
-        boolean retVal = false;
-        List<RoomMember> memberList;
-
-        if ((null != aRoom) && (null != (memberList = (List<RoomMember>) aRoom.getJoinedMembers()))) {
-            if (CommonActivityUtils.ROOM_SIZE_ONE_TO_ONE == memberList.size()) {
-                for (RoomMember member : memberList) {
-                    if (member.getUserId().equals(aSearchedUserId)) {
-                        retVal = true;
-                    }
-                }
-            }
-        }
-
-        return retVal;
-    }
-
-    /**
      * Set a room as a direct chat room.<br>
      * In case of success the corresponding room is displayed.
      *
@@ -1513,7 +1445,7 @@ public class CommonActivityUtils {
      * @param sourceFile     the file source path
      * @param dstDirPath     the dst path
      * @param outputFilename optional the output filename
-     * @param callback the asynchronous callback
+     * @param callback       the asynchronous callback
      */
     private static void saveFileInto(final File sourceFile, final String dstDirPath, final String outputFilename, final ApiCallback<String> callback) {
         // sanity check
@@ -1521,9 +1453,9 @@ public class CommonActivityUtils {
             new Handler(Looper.getMainLooper()).post(new Runnable() {
                 @Override
                 public void run() {
-                   if (null != callback) {
-                       callback.onNetworkError(new Exception("Null parameters"));
-                   }
+                    if (null != callback) {
+                        callback.onNetworkError(new Exception("Null parameters"));
+                    }
                 }
             });
             return;
@@ -1654,16 +1586,14 @@ public class CommonActivityUtils {
         saveFileInto(srcFile, Environment.DIRECTORY_DOWNLOADS, filename, new ApiCallback<String>() {
             @Override
             public void onSuccess(String fullFilePath) {
-                if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-                    if (null != fullFilePath) {
-                        DownloadManager downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
+                if (null != fullFilePath) {
+                    DownloadManager downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
 
-                        try {
-                            File file = new File(fullFilePath);
-                            downloadManager.addCompletedDownload(file.getName(), file.getName(), true, mimeType, file.getAbsolutePath(), file.length(), true);
-                        } catch (Exception e) {
-                            Log.e(LOG_TAG, "## saveMediaIntoDownloads(): Exception Msg=" + e.getMessage());
-                        }
+                    try {
+                        File file = new File(fullFilePath);
+                        downloadManager.addCompletedDownload(file.getName(), file.getName(), true, mimeType, file.getAbsolutePath(), file.length(), true);
+                    } catch (Exception e) {
+                        Log.e(LOG_TAG, "## saveMediaIntoDownloads(): Exception Msg=" + e.getMessage());
                     }
                 }
 
@@ -1729,49 +1659,6 @@ public class CommonActivityUtils {
         Toast.makeText(aContext, aTextToDisplay, Toast.LENGTH_SHORT).show();
     }
 
-    /**
-     * Display a snack.
-     *
-     * @param aTargetView    the parent view.
-     * @param aTextToDisplay the text to display.
-     */
-    public static void displaySnack(View aTargetView, CharSequence aTextToDisplay) {
-        Snackbar.make(aTargetView, aTextToDisplay, Snackbar.LENGTH_SHORT).show();
-    }
-
-    //==============================================================================================================
-    // call utils
-    //==============================================================================================================
-
-    /**
-     * Display a toast message according to the end call reason.
-     *
-     * @param aCallingActivity calling activity
-     * @param aCallEndReason   define the reason of the end call
-     */
-    public static void processEndCallInfo(Activity aCallingActivity, int aCallEndReason) {
-        if (null != aCallingActivity) {
-            if (IMXCall.END_CALL_REASON_UNDEFINED != aCallEndReason) {
-                switch (aCallEndReason) {
-                    case IMXCall.END_CALL_REASON_PEER_HANG_UP:
-                        if (aCallingActivity instanceof InComingCallActivity) {
-                            CommonActivityUtils.displayToastOnUiThread(aCallingActivity, aCallingActivity.getString(R.string.call_error_peer_cancelled_call));
-                        } else {
-                            // let VectorCallActivity manage its
-                        }
-                        break;
-
-                    case IMXCall.END_CALL_REASON_PEER_HANG_UP_ELSEWHERE:
-                        CommonActivityUtils.displayToastOnUiThread(aCallingActivity, aCallingActivity.getString(R.string.call_error_peer_hangup_elsewhere));
-                        break;
-
-                    default:
-                        break;
-                }
-            }
-        }
-    }
-
     //==============================================================================================================
     // room utils
     //==============================================================================================================
@@ -1827,13 +1714,6 @@ public class CommonActivityUtils {
     }
 
     /**
-     * @return the badge value
-     */
-    public static int getBadgeCount() {
-        return mBadgeValue;
-    }
-
-    /**
      * Refresh the badge count for specific configurations.<br>
      * The refresh is only effective if the device is:
      * <ul><li>offline</li><li>does not support GCM</li>
@@ -1873,7 +1753,7 @@ public class CommonActivityUtils {
      * @param aContext     App context
      * @param aDataHandler data handler instance
      */
-    public static void updateBadgeCount(Context aContext, MXDataHandler aDataHandler) {
+    private static void updateBadgeCount(Context aContext, MXDataHandler aDataHandler) {
         //sanity check
         if ((null == aContext) || (null == aDataHandler)) {
             Log.w(LOG_TAG, "## updateBadgeCount(): invalid input null values");
@@ -2013,13 +1893,13 @@ public class CommonActivityUtils {
 
         TextView textView;
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_device_info_device_name);
+        textView = layout.findViewById(R.id.encrypted_device_info_device_name);
         textView.setText(deviceInfo.displayName());
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_device_info_device_id);
+        textView = layout.findViewById(R.id.encrypted_device_info_device_id);
         textView.setText(deviceInfo.deviceId);
 
-        textView = (TextView) layout.findViewById(R.id.encrypted_device_info_device_key);
+        textView = layout.findViewById(R.id.encrypted_device_info_device_key);
         textView.setText(deviceInfo.fingerprint());
 
         builder.setView(layout);
@@ -2035,6 +1915,9 @@ public class CommonActivityUtils {
         builder.setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
+                if (null != callback) {
+                    callback.onSuccess(null);
+                }
             }
         });
 
@@ -2043,12 +1926,21 @@ public class CommonActivityUtils {
 
     /**
      * Export the e2e keys for a dedicated session.
-     * @param session the session
+     *
+     * @param session  the session
      * @param password the password
      * @param callback the asynchronous callback.
      */
-    public static void exportKeys(final MXSession session, final String password, final ApiCallback<String>callback) {
+    public static void exportKeys(final MXSession session, final String password, final ApiCallback<String> callback) {
         final Context appContext = VectorApp.getInstance();
+
+        if (null == session.getCrypto()) {
+            if (null != callback) {
+                callback.onMatrixError(new MatrixError("EMPTY", "No crypto"));
+            }
+
+            return;
+        }
 
         session.getCrypto().exportRoomKeys(password, new ApiCallback<byte[]>() {
             @Override
@@ -2121,10 +2013,11 @@ public class CommonActivityUtils {
 
     /**
      * Display the unknown e2e devices
-     * @param session the session
-     * @param activity the calling activity
+     *
+     * @param session        the session
+     * @param activity       the calling activity
      * @param unknownDevices the unknown devices list
-     * @param listener optional listener to add an optional "Send anyway" button
+     * @param listener       optional listener to add an optional "Send anyway" button
      */
     public static void displayUnknownDevicesDialog(MXSession session, FragmentActivity activity, MXUsersDevicesMap<MXDeviceInfo> unknownDevices, VectorUnknownDevicesFragment.IUnknownDevicesSendAnywayListener listener) {
         // sanity checks
@@ -2140,12 +2033,17 @@ public class CommonActivityUtils {
         }
 
         fragment = VectorUnknownDevicesFragment.newInstance(session.getMyUserId(), unknownDevices, listener);
-        fragment.show(fm, TAG_FRAGMENT_UNKNOWN_DEVICES_DIALOG_DIALOG);
+        try {
+            fragment.show(fm, TAG_FRAGMENT_UNKNOWN_DEVICES_DIALOG_DIALOG);
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "## displayUnknownDevicesDialog() failed : " + e.getMessage());
+        }
     }
 
     /**
      * Update the menu icons colors
-     * @param menu the menu
+     *
+     * @param menu  the menu
      * @param color the color
      */
     public static void tintMenuIcons(Menu menu, int color) {
@@ -2162,17 +2060,28 @@ public class CommonActivityUtils {
     }
 
     /**
-     * Tint the drawable with the menu icon color
-     * @param context the context
-     * @param drawable the drawable to tint
+     * Tint the drawable with a theme attribute
+     *
+     * @param context   the context
+     * @param drawable  the drawable to tint
+     * @param attribute the theme color
      * @return the tinted drawable
      */
     public static Drawable tintDrawable(Context context, Drawable drawable, @AttrRes int attribute) {
-        int color = ThemeUtils.getColor(context, attribute);
+        return tintDrawableWithColor(drawable, ThemeUtils.getColor(context, attribute));
+    }
+
+    /**
+     * Tint the drawable with a color integer
+     *
+     * @param drawable the drawable to tint
+     * @param color    the color
+     * @return the tinted drawable
+     */
+    public static Drawable tintDrawableWithColor(Drawable drawable, @ColorInt int color) {
         Drawable tinted = DrawableCompat.wrap(drawable);
         drawable.mutate();
         DrawableCompat.setTint(tinted, color);
-
         return tinted;
     }
 }

@@ -17,6 +17,7 @@
 
 package im.vector.activity;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.SearchManager;
 import android.content.BroadcastReceiver;
@@ -45,7 +46,6 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.SearchView;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
@@ -109,16 +109,16 @@ import im.vector.R;
 import im.vector.VectorApp;
 import im.vector.fragments.AbsHomeFragment;
 import im.vector.fragments.FavouritesFragment;
+import im.vector.fragments.GroupsFragment;
 import im.vector.fragments.HomeFragment;
 import im.vector.fragments.PeopleFragment;
 import im.vector.fragments.RoomsFragment;
 import im.vector.receiver.VectorUniversalLinkReceiver;
 import im.vector.services.EventStreamService;
 import im.vector.util.BugReporter;
-import im.vector.util.PreferencesManager;
+import im.vector.util.CallsManager;
 import im.vector.util.RoomUtils;
 import im.vector.util.ThemeUtils;
-import im.vector.util.VectorCallSoundManager;
 import im.vector.util.VectorUtils;
 import im.vector.view.UnreadCounterBadgeView;
 import im.vector.view.VectorPendingCallView;
@@ -127,7 +127,7 @@ import im.vector.view.VectorPendingCallView;
  * Displays the main screen of the app, with rooms the user has joined and the ability to create
  * new rooms.
  */
-public class VectorHomeActivity extends AppCompatActivity implements SearchView.OnQueryTextListener {
+public class VectorHomeActivity extends RiotAppCompatActivity implements SearchView.OnQueryTextListener {
 
     private static final String LOG_TAG = VectorHomeActivity.class.getSimpleName();
 
@@ -139,6 +139,9 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
     // jump to a member details sheet
     public static final String EXTRA_MEMBER_ID = "VectorHomeActivity.EXTRA_MEMBER_ID";
+
+    // jump to a group details sheet
+    public static final String EXTRA_GROUP_ID = "VectorHomeActivity.EXTRA_GROUP_ID";
 
     // there are two ways to open an external link
     // 1- EXTRA_UNIVERSAL_LINK_URI : the link is opened as soon there is an event check processed (application is launched when clicking on the URI link)
@@ -156,7 +159,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
     // i.e the user tries to send several files with VECTOR
     public static final String EXTRA_SHARED_INTENT_PARAMS = "VectorHomeActivity.EXTRA_SHARED_INTENT_PARAMS";
 
-    public static final boolean WAITING_VIEW_STOP = false;
+    private static final boolean WAITING_VIEW_STOP = false;
     public static final boolean WAITING_VIEW_START = true;
 
     public static final String BROADCAST_ACTION_STOP_WAITING_VIEW = "im.vector.activity.ACTION_STOP_WAITING_VIEW";
@@ -165,6 +168,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
     private static final String TAG_FRAGMENT_FAVOURITES = "TAG_FRAGMENT_FAVOURITES";
     private static final String TAG_FRAGMENT_PEOPLE = "TAG_FRAGMENT_PEOPLE";
     private static final String TAG_FRAGMENT_ROOMS = "TAG_FRAGMENT_ROOMS";
+    private static final String TAG_FRAGMENT_GROUPS = "TAG_FRAGMENT_GROUPS";
 
     // Key used to restore the proper fragment after orientation change
     private static final String CURRENT_MENU_ID = "CURRENT_MENU_ID";
@@ -176,6 +180,8 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
     private String mMemberIdToOpen = null;
 
+    private String mGroupIdToOpen = null;
+
     @BindView(R.id.listView_spinner_views)
     View mWaitingView;
 
@@ -186,12 +192,6 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
     private Timer mFloatingActionButtonTimer;
 
     private MXEventListener mEventsListener;
-    private MXEventListener mLiveEventListener;
-
-    private AlertDialog.Builder mUseGAAlert;
-
-    // when a member is banned, the session must be reloaded
-    public static boolean mClearCacheRequired = false;
 
     // sliding menu management
     private int mSlidingMenuIndex = -1;
@@ -316,6 +316,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             intent.removeExtra(EXTRA_JUMP_TO_UNIVERSAL_LINK);
             intent.removeExtra(EXTRA_JUMP_TO_ROOM_PARAMS);
             intent.removeExtra(EXTRA_MEMBER_ID);
+            intent.removeExtra(EXTRA_GROUP_ID);
             intent.removeExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI);
         } else {
 
@@ -343,6 +344,9 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
             mMemberIdToOpen = intent.getStringExtra(EXTRA_MEMBER_ID);
             intent.removeExtra(EXTRA_MEMBER_ID);
+
+            mGroupIdToOpen = intent.getStringExtra(EXTRA_GROUP_ID);
+            intent.removeExtra(EXTRA_GROUP_ID);
 
             // the home activity has been launched with an universal link
             if (intent.hasExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI)) {
@@ -375,6 +379,8 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                         }
                     } else if (MXSession.isRoomAlias(roomIdOrAlias)) {
                         Log.d(LOG_TAG, "Has a valid universal link of the room Alias " + roomIdOrAlias);
+
+                        showWaitingView();
 
                         // it is a room alias
                         // convert the room alias to room Id
@@ -448,44 +454,24 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             selectedMenu.performClick();
         }
 
-        // clear the notification if they are not anymore valid
-        // i.e the event has been read from another client
-        // or deleted it
-        // + other actions which require a background listener
-        mLiveEventListener = new MXEventListener() {
-            @Override
-            public void onLiveEventsChunkProcessed(String fromToken, String toToken) {
-                // treat any pending URL link workflow, that was started previously
-                processIntentUniversalLink();
-
-                if (mClearCacheRequired) {
-                    mClearCacheRequired = false;
-                    Matrix.getInstance(VectorHomeActivity.this).reloadSessions(VectorHomeActivity.this);
-                }
-            }
-
-            @Override
-            public void onStoreReady() {
-                if (null != mSharedFilesIntent) {
-                    VectorHomeActivity.this.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Log.d(LOG_TAG, "shared intent : the store is now ready, display sendFilesTo");
-                            CommonActivityUtils.sendFilesTo(VectorHomeActivity.this, mSharedFilesIntent);
-                            mSharedFilesIntent = null;
-                        }
-                    });
-                }
-            }
-        };
-
-        mSession.getDataHandler().addListener(mLiveEventListener);
-
         // initialize the public rooms list
         PublicRoomsManager.getInstance().setSession(mSession);
         PublicRoomsManager.getInstance().refreshPublicRoomsCount(null);
 
         initViews();
+    }
+
+    /**
+     * Display the TAB if it is required
+     */
+    private void showFloatingActionButton() {
+        if (null != mFloatingActionButton) {
+            if ((mCurrentMenuId == R.id.bottom_action_favourites) || (mCurrentMenuId == R.id.bottom_action_groups)) {
+                mFloatingActionButton.setVisibility(View.GONE);
+            } else {
+                mFloatingActionButton.show();
+            }
+        }
     }
 
     @Override
@@ -512,26 +498,21 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         // jump to an external link
         if (null != mUniversalLinkToOpen) {
             intent.putExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI, mUniversalLinkToOpen);
-            this.runOnUiThread(new Runnable() {
+
+            new Handler(getMainLooper()).postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     processIntentUniversalLink();
                     mUniversalLinkToOpen = null;
                 }
-            });
+            }, 100);
         }
 
         if (mSession.isAlive()) {
             addEventsListener();
         }
 
-        if (null != mFloatingActionButton) {
-            if (mCurrentMenuId == R.id.bottom_action_favourites) {
-                mFloatingActionButton.setVisibility(View.GONE);
-            } else {
-                mFloatingActionButton.show();
-            }
-        }
+        showFloatingActionButton();
 
         this.runOnUiThread(new Runnable() {
             @Override
@@ -541,30 +522,6 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         });
 
         mVectorPendingCallView.checkPendingCall();
-
-        // check if the GA accepts to send crash reports.
-        // do not display this alert if there is an universal link management
-        if (null == PreferencesManager.useGA(this) && (null == mUseGAAlert) && (null == mUniversalLinkToOpen) && (null == mAutomaticallyOpenedRoomParams)) {
-            mUseGAAlert = new AlertDialog.Builder(this);
-
-            mUseGAAlert.setMessage(getApplicationContext().getString(R.string.ga_use_alert_message)).setPositiveButton(getString(R.string.yes), new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    if (null != VectorApp.getInstance()) {
-                        mUseGAAlert = null;
-                        PreferencesManager.setUseGA(VectorHomeActivity.this, true);
-                    }
-                }
-            }).setNegativeButton(getString(R.string.no), new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    if (null != VectorApp.getInstance()) {
-                        mUseGAAlert = null;
-                        PreferencesManager.setUseGA(VectorHomeActivity.this, false);
-                    }
-                }
-            }).show();
-        }
 
         if ((null != VectorApp.getInstance()) && VectorApp.getInstance().didAppCrash()) {
             // crash reported by a rage shake
@@ -599,6 +556,14 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             startRoomInfoIntent.putExtra(VectorMemberDetailsActivity.EXTRA_MATRIX_ID, mSession.getCredentials().userId);
             startActivity(startRoomInfoIntent);
             mMemberIdToOpen = null;
+        }
+
+        if (null != mGroupIdToOpen) {
+            Intent groupIntent = new Intent(VectorHomeActivity.this, VectorGroupDetailsActivity.class);
+            groupIntent.putExtra(VectorGroupDetailsActivity.EXTRA_GROUP_ID, mGroupIdToOpen);
+            groupIntent.putExtra(VectorGroupDetailsActivity.EXTRA_MATRIX_ID, mSession.getCredentials().userId);
+            startActivity(groupIntent);
+            mGroupIdToOpen = null;
         }
 
         // https://github.com/vector-im/vector-android/issues/323
@@ -725,11 +690,6 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         if (sharedInstance == this) {
             sharedInstance = null;
         }
-
-        // GA issue : mSession was null
-        if ((null != mSession) && mSession.isAlive()) {
-            mSession.getDataHandler().removeListener(mLiveEventListener);
-        }
     }
 
     @Override
@@ -757,6 +717,8 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         mMemberIdToOpen = intent.getStringExtra(EXTRA_MEMBER_ID);
         intent.removeExtra(EXTRA_MEMBER_ID);
 
+        mGroupIdToOpen = intent.getStringExtra(EXTRA_GROUP_ID);
+        intent.removeExtra(EXTRA_GROUP_ID);
 
         // start waiting view
         if (intent.getBooleanExtra(EXTRA_WAITING_VIEW_STATUS, VectorHomeActivity.WAITING_VIEW_STOP)) {
@@ -852,6 +814,15 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                 mCurrentFragmentTag = TAG_FRAGMENT_ROOMS;
                 mSearchView.setQueryHint(getString(R.string.home_filter_placeholder_rooms));
                 break;
+            case R.id.bottom_action_groups:
+                Log.d(LOG_TAG, "onNavigationItemSelected GROUPS");
+                fragment = mFragmentManager.findFragmentByTag(TAG_FRAGMENT_GROUPS);
+                if (fragment == null) {
+                    fragment = GroupsFragment.newInstance();
+                }
+                mCurrentFragmentTag = TAG_FRAGMENT_GROUPS;
+                mSearchView.setQueryHint(getString(R.string.home_filter_placeholder_groups));
+                break;
         }
 
         synchronized (this) {
@@ -859,16 +830,14 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                 mFloatingActionButtonTimer.cancel();
                 mFloatingActionButtonTimer = null;
             }
-            mFloatingActionButton.show();
         }
 
         // clear waiting view
         stopWaitingView();
 
-        // don't display the fab for the favorites tab
-        mFloatingActionButton.setVisibility((item.getItemId() != R.id.bottom_action_favourites) ? View.VISIBLE : View.GONE);
-
         mCurrentMenuId = item.getItemId();
+
+        showFloatingActionButton();
 
         if (fragment != null) {
             resetFilter();
@@ -882,6 +851,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             }
         }
     }
+
     /**
      * Update UI colors to match the selected tab
      *
@@ -905,7 +875,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         }
 
         // Set color of toolbar search view
-        EditText edit = (EditText) mSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
+        EditText edit = mSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
         edit.setTextColor(ThemeUtils.getColor(this, R.attr.primary_text_color));
         edit.setHintTextColor(ThemeUtils.getColor(this, R.attr.primary_hint_text_color));
     }
@@ -917,7 +887,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         mVectorPendingCallView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                IMXCall call = VectorCallViewActivity.getActiveCall();
+                IMXCall call = CallsManager.getSharedInstance().getActiveCall();
                 if (null != call) {
                     final Intent intent = new Intent(VectorHomeActivity.this, VectorCallViewActivity.class);
                     intent.putExtra(VectorCallViewActivity.EXTRA_MATRIX_ID, call.getSession().getCredentials().userId);
@@ -935,16 +905,16 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
         addUnreadBadges();
 
-		// init the search view
+        // init the search view
         SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
         // Remove unwanted left margin
-        LinearLayout searchEditFrame = (LinearLayout) mSearchView.findViewById(R.id.search_edit_frame);
+        LinearLayout searchEditFrame = mSearchView.findViewById(R.id.search_edit_frame);
         if (searchEditFrame != null) {
             ViewGroup.MarginLayoutParams searchEditFrameParams = (ViewGroup.MarginLayoutParams) searchEditFrame.getLayoutParams();
             searchEditFrameParams.leftMargin = 0;
             searchEditFrame.setLayoutParams(searchEditFrameParams);
         }
-        ImageView searchIcon = (ImageView) mSearchView.findViewById(R.id.search_mag_icon);
+        ImageView searchIcon = mSearchView.findViewById(R.id.search_mag_icon);
         if (searchIcon != null) {
             ViewGroup.MarginLayoutParams searchIconParams = (ViewGroup.MarginLayoutParams) searchIcon.getLayoutParams();
             searchIconParams.leftMargin = 0;
@@ -962,7 +932,11 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             mFloatingActionButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    onFloatingButtonClick();
+                    Fragment fragment = getSelectedFragment();
+
+                    if (!(fragment instanceof AbsHomeFragment) || !((AbsHomeFragment) fragment).onFabClick()) {
+                        onFloatingButtonClick();
+                    }
                 }
             });
         }
@@ -1074,6 +1048,10 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             case R.id.bottom_action_rooms:
                 fragment = mFragmentManager.findFragmentByTag(TAG_FRAGMENT_ROOMS);
                 break;
+            case R.id.bottom_action_groups:
+                fragment = mFragmentManager.findFragmentByTag(TAG_FRAGMENT_GROUPS);
+                break;
+
         }
 
         return fragment;
@@ -1094,62 +1072,6 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         }
 
         //TODO add listener to know when filtering is done and dismiss the keyboard
-    }
-
-    /**
-     * Handle a universal link intent
-     *
-     * @param intent
-     */
-    private void handleUniversalLink(final Intent intent) {
-        final Uri uri = intent.getParcelableExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI);
-        intent.removeExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI);
-
-        // detect the room could be opened without waiting the next sync
-        HashMap<String, String> params = VectorUniversalLinkReceiver.parseUniversalLink(uri);
-
-        if ((null != params) && params.containsKey(VectorUniversalLinkReceiver.ULINK_ROOM_ID_OR_ALIAS_KEY)) {
-            Log.d(LOG_TAG, "Has a valid universal link");
-
-            final String roomIdOrAlias = params.get(VectorUniversalLinkReceiver.ULINK_ROOM_ID_OR_ALIAS_KEY);
-
-            // it is a room ID ?
-            if (MXSession.isRoomId(roomIdOrAlias)) {
-                Log.d(LOG_TAG, "Has a valid universal link to the room ID " + roomIdOrAlias);
-                Room room = mSession.getDataHandler().getRoom(roomIdOrAlias, false);
-
-                if (null != room) {
-                    Log.d(LOG_TAG, "Has a valid universal link to a known room");
-                    // open the room asap
-                    mUniversalLinkToOpen = uri;
-                } else {
-                    Log.d(LOG_TAG, "Has a valid universal link but the room is not yet known");
-                    // wait the next sync
-                    intent.putExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI, uri);
-                }
-            } else if (MXSession.isRoomAlias(roomIdOrAlias)) {
-                Log.d(LOG_TAG, "Has a valid universal link of the room Alias " + roomIdOrAlias);
-
-                // it is a room alias
-                // convert the room alias to room Id
-                mSession.getDataHandler().roomIdByAlias(roomIdOrAlias, new SimpleApiCallback<String>() {
-                    @Override
-                    public void onSuccess(String roomId) {
-                        Log.d(LOG_TAG, "Retrieve the room ID " + roomId);
-
-                        getIntent().putExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI, uri);
-
-                        // the room exists, opens it
-                        if (null != mSession.getDataHandler().getRoom(roomId, false)) {
-                            Log.d(LOG_TAG, "Find the room from room ID : process it");
-                            processIntentUniversalLink();
-                        } else {
-                            Log.d(LOG_TAG, "Don't know the room");
-                        }
-                    }
-                });
-            }
-        }
     }
 
     /**
@@ -1209,8 +1131,10 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                 uri = intent.getParcelableExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_URI);
 
                 if (null != uri) {
-                    Intent myBroadcastIntent = new Intent(VectorUniversalLinkReceiver.BROADCAST_ACTION_UNIVERSAL_LINK_RESUME);
-
+                    // since android O
+                    // set the class to avoid having "Background execution not allowed"
+                    Intent myBroadcastIntent = new Intent(VectorApp.getInstance(), VectorUniversalLinkReceiver.class);
+                    myBroadcastIntent.setAction(VectorUniversalLinkReceiver.BROADCAST_ACTION_UNIVERSAL_LINK_RESUME);
                     myBroadcastIntent.putExtras(getIntent().getExtras());
                     myBroadcastIntent.putExtra(VectorUniversalLinkReceiver.EXTRA_UNIVERSAL_LINK_SENDER_ID, VectorUniversalLinkReceiver.HOME_SENDER_ID);
                     sendBroadcast(myBroadcastIntent);
@@ -1249,12 +1173,6 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                             }
                         }
                     })
-                    .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            invitePeopleToNewRoom();
-                        }
-                    })
                     .setNegativeButton(R.string.cancel, null)
                     .show();
         }
@@ -1279,26 +1197,41 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                 if (null != mFloatingActionButton) {
                     mFloatingActionButton.hide();
 
-                    mFloatingActionButtonTimer = new Timer();
-                    mFloatingActionButtonTimer.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            synchronized (this) {
-                                if (null != mFloatingActionButtonTimer) {
-                                    mFloatingActionButtonTimer.cancel();
-                                    mFloatingActionButtonTimer = null;
-                                }
-                            }
-                            VectorHomeActivity.this.runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    if (null != mFloatingActionButton) {
-                                        mFloatingActionButton.show();
+                    try {
+                        mFloatingActionButtonTimer = new Timer();
+                        mFloatingActionButtonTimer.schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                synchronized (this) {
+                                    if (null != mFloatingActionButtonTimer) {
+                                        mFloatingActionButtonTimer.cancel();
+                                        mFloatingActionButtonTimer = null;
                                     }
                                 }
-                            });
+                                VectorHomeActivity.this.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        showFloatingActionButton();
+                                    }
+                                });
+                            }
+                        }, 1000);
+                    } catch (Throwable throwable) {
+                        Log.e(LOG_TAG, "failed to init mFloatingActionButtonTimer " + throwable.getMessage());
+
+                        if (null != mFloatingActionButtonTimer) {
+                            mFloatingActionButtonTimer.cancel();
+                            mFloatingActionButtonTimer = null;
                         }
-                    }, 1000);
+
+                        VectorHomeActivity.this.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                showFloatingActionButton();
+                            }
+                        });
+
+                    }
                 }
             }
         }
@@ -1383,7 +1316,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         View dialogView = inflater.inflate(R.layout.dialog_join_room_by_id, null);
         alertDialogBuilder.setView(dialogView);
 
-        final EditText textInput = (EditText) dialogView.findViewById(R.id.join_room_edit_text);
+        final EditText textInput = dialogView.findViewById(R.id.join_room_edit_text);
         textInput.setTextColor(ThemeUtils.getColor(this, R.attr.riot_primary_text_color));
 
         // set dialog message
@@ -1496,16 +1429,20 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
         Collection<RoomSummary> roomSummaries = mSession.getDataHandler().getStore().getSummaries();
         for (RoomSummary roomSummary : roomSummaries) {
-            String roomSummaryId = roomSummary.getRoomId();
-            Room room = mSession.getDataHandler().getStore().getRoom(roomSummaryId);
+            // reported by rageshake
+            // i don't see how it is possible to have a null roomSummary
+            if (null != roomSummary) {
+                String roomSummaryId = roomSummary.getRoomId();
+                Room room = mSession.getDataHandler().getStore().getRoom(roomSummaryId);
 
-            // check if the room exists
-            // the user conference rooms are not displayed.
-            if (room != null && !room.isConferenceUserRoom() && room.isInvited()) {
-                if (room.isDirectChatInvitation()) {
-                    mDirectChatInvitations.add(room);
-                } else {
-                    mRoomInvitations.add(room);
+                // check if the room exists
+                // the user conference rooms are not displayed.
+                if (room != null && !room.isConferenceUserRoom() && room.isInvited()) {
+                    if (room.isDirectChatInvitation()) {
+                        mDirectChatInvitations.add(room);
+                    } else {
+                        mRoomInvitations.add(room);
+                    }
                 }
             }
         }
@@ -1545,50 +1482,84 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         CommonActivityUtils.previewRoom(this, roomPreviewData);
     }
 
-    public void onRejectInvitation(final MXSession session, final String roomId) {
-        Room room = session.getDataHandler().getRoom(roomId);
+    /**
+     * Create the room forget / leave callback
+     *
+     * @param roomId the room id
+     * @param onSuccessCallback the success callback
+     * @return the asynchronous callback
+     */
+    private ApiCallback<Void> getForgetLeaveCallback(final String roomId, final SimpleApiCallback<Void> onSuccessCallback) {
+        return new ApiCallback<Void>() {
+            @Override
+            public void onSuccess(Void info) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        // clear any pending notification for this room
+                        EventStreamService.cancelNotificationsForRoomId(mSession.getMyUserId(), roomId);
+                        stopWaitingView();
+
+                        if (null != onSuccessCallback) {
+                            onSuccessCallback.onSuccess(null);
+                        }
+                    }
+                });
+            }
+
+            private void onError(final String message) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        stopWaitingView();
+                        Toast.makeText(VectorHomeActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onNetworkError(Exception e) {
+                onError(e.getLocalizedMessage());
+            }
+
+            @Override
+            public void onMatrixError(MatrixError e) {
+                onError(e.getLocalizedMessage());
+            }
+
+            @Override
+            public void onUnexpectedError(Exception e) {
+                onError(e.getLocalizedMessage());
+            }
+        };
+    }
+
+    /**
+     * Trigger the room forget
+     * @param roomId the room id
+     * @param onSuccessCallback the success asynchronous callback
+     */
+    public void onForgetRoom(final String roomId, final SimpleApiCallback<Void> onSuccessCallback) {
+        Room room = mSession.getDataHandler().getRoom(roomId);
 
         if (null != room) {
             showWaitingView();
+            room.forget(getForgetLeaveCallback(roomId, onSuccessCallback));
+        }
+    }
 
-            room.leave(new ApiCallback<Void>() {
-                @Override
-                public void onSuccess(Void info) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            // clear any pending notification for this room
-                            EventStreamService.cancelNotificationsForRoomId(mSession.getMyUserId(), roomId);
-                            stopWaitingView();
-                        }
-                    });
-                }
+    /**
+     * Trigger the room leave / invitation reject.
+     *
+     * @param roomId the room id
+     * @param onSuccessCallback the success asynchronous callback
+     */
+    public void onRejectInvitation(final String roomId, final SimpleApiCallback<Void> onSuccessCallback) {
+        Room room = mSession.getDataHandler().getRoom(roomId);
 
-                private void onError(final String message) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            stopWaitingView();
-                            Toast.makeText(VectorHomeActivity.this, message, Toast.LENGTH_LONG).show();
-                        }
-                    });
-                }
-
-                @Override
-                public void onNetworkError(Exception e) {
-                    onError(e.getLocalizedMessage());
-                }
-
-                @Override
-                public void onMatrixError(MatrixError e) {
-                    onError(e.getLocalizedMessage());
-                }
-
-                @Override
-                public void onUnexpectedError(Exception e) {
-                    onError(e.getLocalizedMessage());
-                }
-            });
+        if (null != room) {
+            showWaitingView();
+            room.leave(getForgetLeaveCallback(roomId, onSuccessCallback));
         }
     }
 
@@ -1607,9 +1578,9 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         dialog.setTitle(R.string.encryption_export_room_keys);
         dialog.setView(dialogLayout);
 
-        final TextInputEditText passPhrase1EditText = (TextInputEditText) dialogLayout.findViewById(R.id.dialog_e2e_keys_passphrase_edit_text);
-        final TextInputEditText passPhrase2EditText = (TextInputEditText) dialogLayout.findViewById(R.id.dialog_e2e_keys_confirm_passphrase_edit_text);
-        final Button exportButton = (Button) dialogLayout.findViewById(R.id.dialog_e2e_keys_export_button);
+        final TextInputEditText passPhrase1EditText = dialogLayout.findViewById(R.id.dialog_e2e_keys_passphrase_edit_text);
+        final TextInputEditText passPhrase2EditText = dialogLayout.findViewById(R.id.dialog_e2e_keys_confirm_passphrase_edit_text);
+        final Button exportButton = dialogLayout.findViewById(R.id.dialog_e2e_keys_export_button);
         final TextWatcher textWatcher = new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -1702,7 +1673,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
     private void refreshSlidingMenu() {
         // use a dedicated view
-        NavigationView navigationView = (NavigationView) findViewById(R.id.navigation_view);
+        NavigationView navigationView = findViewById(R.id.navigation_view);
 
         ActionBarDrawerToggle drawerToggle = new ActionBarDrawerToggle(
                 this,                  /* host Activity */
@@ -1724,6 +1695,21 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
 
                     case R.id.sliding_menu_send_bug_report: {
                         BugReporter.sendBugReport();
+                        break;
+                    }
+
+                    case R.id.sliding_menu_exit : {
+                        if (null != EventStreamService.getInstance()) {
+                            EventStreamService.getInstance().stopNow();
+                        }
+                        VectorHomeActivity.this.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                VectorHomeActivity.this.finish();
+                                System.exit(0);
+                            }
+                        });
+
                         break;
                     }
 
@@ -1825,18 +1811,18 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         }
 
         // init the main menu
-        TextView displayNameTextView = (TextView) navigationView.findViewById(R.id.home_menu_main_displayname);
+        TextView displayNameTextView = navigationView.findViewById(R.id.home_menu_main_displayname);
 
         if (null != displayNameTextView) {
             displayNameTextView.setText(mSession.getMyUser().displayname);
         }
 
-        TextView userIdTextView = (TextView) navigationView.findViewById(R.id.home_menu_main_matrix_id);
+        TextView userIdTextView = navigationView.findViewById(R.id.home_menu_main_matrix_id);
         if (null != userIdTextView) {
             userIdTextView.setText(mSession.getMyUserId());
         }
 
-        ImageView mainAvatarView = (ImageView) navigationView.findViewById(R.id.home_menu_main_avatar);
+        ImageView mainAvatarView = navigationView.findViewById(R.id.home_menu_main_avatar);
 
         if (null != mainAvatarView) {
             VectorUtils.loadUserAvatar(this, mSession, mainAvatarView, mSession.getMyUser());
@@ -1866,7 +1852,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
     public void startCall(String sessionId, String callId, MXUsersDevicesMap<MXDeviceInfo> unknownDevices) {
         // sanity checks
         if ((null != sessionId) && (null != callId)) {
-            final Intent intent = new Intent(VectorHomeActivity.this, InComingCallActivity.class);
+            final Intent intent = new Intent(VectorHomeActivity.this, VectorCallViewActivity.class);
 
             intent.putExtra(VectorCallViewActivity.EXTRA_MATRIX_ID, sessionId);
             intent.putExtra(VectorCallViewActivity.EXTRA_CALL_ID, callId);
@@ -1879,37 +1865,6 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                 @Override
                 public void run() {
                     VectorHomeActivity.this.startActivity(intent);
-                }
-            });
-        }
-    }
-
-    /**
-     * End of call management.
-     *
-     * @param call the ended call/
-     */
-    public void onCallEnd(IMXCall call) {
-        if (null != call) {
-            String callId = call.getCallId();
-            // either the call view has been put in background
-            // or the ringing started because of a notified call in lockscreen (the callview was never created)
-            final boolean isActiveCall = VectorCallViewActivity.isBackgroundedCallId(callId) ||
-                    (!mSession.mCallsManager.hasActiveCalls() && IMXCall.CALL_STATE_CREATED.equals(call.getCallState()));
-
-            VectorHomeActivity.this.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (isActiveCall) {
-                        // suspend the app if required
-                        VectorApp.getInstance().onCallEnd();
-                        // hide the view
-                        mVectorPendingCallView.checkPendingCall();
-                        // clear call in progress notification
-                        EventStreamService.checkDisplayedNotifications();
-                        // and play a lovely sound
-                        VectorCallSoundManager.startEndCallSound();
-                    }
                 }
             });
         }
@@ -2020,6 +1975,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
     /**
      * Add the unread messages badges.
      */
+    @SuppressLint("RestrictedApi")
     private void addUnreadBadges() {
         final float scale = getResources().getDisplayMetrics().density;
         int badgeOffsetX = (int) (18 * scale + 0.5f);
@@ -2032,7 +1988,8 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
         for (int menuIndex = 0; menuIndex < mBottomNavigationView.getMenu().size(); menuIndex++) {
             try {
                 int itemId = mBottomNavigationView.getMenu().getItem(menuIndex).getItemId();
-                BottomNavigationItemView navigationItemView = (BottomNavigationItemView) mBottomNavigationView.findViewById(itemId);
+                BottomNavigationItemView navigationItemView = mBottomNavigationView.findViewById(itemId);
+
 
                 navigationItemView.setShiftingMode(false);
 
@@ -2119,7 +2076,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                     filteredRoomIdsSet.add(room.getRoomId());
                 }
             } else if (id == R.id.bottom_action_people) {
-                filteredRoomIdsSet.addAll(mSession.getDirectChatRoomIdsList());
+                filteredRoomIdsSet.addAll(mSession.getDataHandler().getDirectChatRoomIdsList());
                 // Add direct chat invitations
                 for (Room room : roomSummaryByRoom.keySet()) {
                     if (room.isDirectChatInvitation() && !room.isConferenceUserRoom()) {
@@ -2133,7 +2090,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                     filteredRoomIdsSet.remove(room.getRoomId());
                 }
             } else if (id == R.id.bottom_action_rooms) {
-                HashSet<String> directChatRoomIds = new HashSet<>(mSession.getDirectChatRoomIdsList());
+                HashSet<String> directChatRoomIds = new HashSet<>(mSession.getDataHandler().getDirectChatRoomIdsList());
                 HashSet<String> lowPriorityRoomIds = new HashSet<>(mSession.roomIdsWithTag(RoomTag.ROOM_TAG_LOW_PRIORITY));
 
                 directChatRoomIds.addAll(directChatInvitations);
@@ -2203,7 +2160,7 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             editor.commit();
 
             if (TextUtils.isEmpty(mSession.getCredentials().deviceId)) {
-                new AlertDialog.Builder(VectorApp.getCurrentActivity())
+                new AlertDialog.Builder(VectorHomeActivity.this)
                         .setMessage(R.string.e2e_enabling_on_app_update)
                         .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
                             @Override
@@ -2271,8 +2228,10 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
                 }
 
                 mRefreshOnChunkEnd = false;
-
                 mSyncInProgressView.setVisibility(View.GONE);
+
+                // treat any pending URL link workflow, that was started previously
+                processIntentUniversalLink();
             }
 
             @Override
@@ -2303,6 +2262,12 @@ public class VectorHomeActivity extends AppCompatActivity implements SearchView.
             @Override
             public void onStoreReady() {
                 onForceRefresh();
+
+                if (null != mSharedFilesIntent) {
+                    Log.d(LOG_TAG, "shared intent : the store is now ready, display sendFilesTo");
+                    CommonActivityUtils.sendFilesTo(VectorHomeActivity.this, mSharedFilesIntent);
+                    mSharedFilesIntent = null;
+                }
             }
 
             @Override
