@@ -57,7 +57,7 @@ import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
 import org.matrix.androidsdk.rest.client.LoginRestClient;
 import org.matrix.androidsdk.rest.client.ProfileRestClient;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.ThreePid;
+import org.matrix.androidsdk.rest.model.pid.ThreePid;
 import org.matrix.androidsdk.rest.model.login.Credentials;
 import org.matrix.androidsdk.rest.model.login.LoginFlow;
 import org.matrix.androidsdk.rest.model.login.RegistrationFlowResponse;
@@ -88,8 +88,7 @@ import im.vector.util.PhoneNumberUtils;
  * Displays the login screen.
  */
 public class LoginActivity extends MXCActionBarActivity implements RegistrationManager.RegistrationListener, RegistrationManager.UsernameValidityListener {
-
-    private static final String LOG_TAG = "LoginActivity";
+    private static final String LOG_TAG = LoginActivity.class.getSimpleName();
 
     private static final int ACCOUNT_CREATION_ACTIVITY_REQUEST_CODE = 314;
     private static final int FALLBACK_LOGIN_ACTIVITY_REQUEST_CODE = 315;
@@ -157,10 +156,6 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
     // the login account name
     private EditText mLoginEmailTextView;
 
-    // the login phone number
-    private EditText mLoginPhoneNumber;
-    private EditText mLoginPhoneNumberCountryCode;
-
     // the login password
     private EditText mLoginPasswordTextView;
 
@@ -225,7 +220,6 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
     private EditText mEmailAddress;
     private View mPhoneNumberLayout;
     private EditText mPhoneNumber;
-    private EditText mPhoneNumberCountryCode;
     private Button mSubmitThreePidButton;
     private Button mSkipThreePidButton;
 
@@ -394,49 +388,49 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
         }
 
         // bind UI widgets
-        mLoginMaskView = (RelativeLayout) findViewById(R.id.flow_ui_mask_login);
+        mLoginMaskView = findViewById(R.id.flow_ui_mask_login);
 
         // login
-        mLoginEmailTextView = (EditText) findViewById(R.id.login_user_name);
-        mLoginPhoneNumber = (EditText) findViewById(R.id.login_phone_number_value);
-        mLoginPhoneNumberCountryCode = (EditText) findViewById(R.id.login_phone_number_country);
-        mLoginPhoneNumberCountryCode.setCompoundDrawablesWithIntrinsicBounds(null, null, CommonActivityUtils.tintDrawable(this, ContextCompat.getDrawable(this, R.drawable.ic_material_expand_more_black), R.attr.settings_icon_tint_color), null);
-        mLoginPasswordTextView = (EditText) findViewById(R.id.login_password);
+        mLoginEmailTextView = findViewById(R.id.login_user_name);
+        EditText loginPhoneNumber = findViewById(R.id.login_phone_number_value);
+        EditText loginPhoneNumberCountryCode = findViewById(R.id.login_phone_number_country);
+        loginPhoneNumberCountryCode.setCompoundDrawablesWithIntrinsicBounds(null, null, CommonActivityUtils.tintDrawable(this, ContextCompat.getDrawable(this, R.drawable.ic_material_expand_more_black), R.attr.settings_icon_tint_color), null);
+        mLoginPasswordTextView = findViewById(R.id.login_password);
 
         // account creation
-        mCreationUsernameTextView = (EditText) findViewById(R.id.creation_your_name);
-        mCreationPassword1TextView = (EditText) findViewById(R.id.creation_password1);
-        mCreationPassword2TextView = (EditText) findViewById(R.id.creation_password2);
+        mCreationUsernameTextView = findViewById(R.id.creation_your_name);
+        mCreationPassword1TextView = findViewById(R.id.creation_password1);
+        mCreationPassword2TextView = findViewById(R.id.creation_password2);
 
         // account creation - three pid
-        mThreePidInstructions = (TextView) findViewById(R.id.instructions);
-        mEmailAddress = (EditText) findViewById(R.id.registration_email);
+        mThreePidInstructions = findViewById(R.id.instructions);
+        mEmailAddress = findViewById(R.id.registration_email);
         mPhoneNumberLayout = findViewById(R.id.registration_phone_number);
-        mPhoneNumber = (EditText) findViewById(R.id.registration_phone_number_value);
-        mPhoneNumberCountryCode = (EditText) findViewById(R.id.registration_phone_number_country);
-        mPhoneNumberCountryCode.setCompoundDrawablesWithIntrinsicBounds(null, null, CommonActivityUtils.tintDrawable(this, ContextCompat.getDrawable(this, R.drawable.ic_material_expand_more_black), R.attr.settings_icon_tint_color), null);
-        mSubmitThreePidButton = (Button) findViewById(R.id.button_submit);
-        mSkipThreePidButton = (Button) findViewById(R.id.button_skip);
+        mPhoneNumber = findViewById(R.id.registration_phone_number_value);
+        EditText phoneNumberCountryCode = findViewById(R.id.registration_phone_number_country);
+        phoneNumberCountryCode.setCompoundDrawablesWithIntrinsicBounds(null, null, CommonActivityUtils.tintDrawable(this, ContextCompat.getDrawable(this, R.drawable.ic_material_expand_more_black), R.attr.settings_icon_tint_color), null);
+        mSubmitThreePidButton = findViewById(R.id.button_submit);
+        mSkipThreePidButton = findViewById(R.id.button_skip);
 
         // forgot password
-        mPasswordForgottenTxtView = (TextView) findViewById(R.id.login_forgot_password);
-        mForgotEmailTextView = (TextView) findViewById(R.id.forget_email_address);
-        mForgotPassword1TextView = (EditText) findViewById(R.id.forget_new_password);
-        mForgotPassword2TextView = (EditText) findViewById(R.id.forget_confirm_new_password);
+        mPasswordForgottenTxtView = findViewById(R.id.login_forgot_password);
+        mForgotEmailTextView = findViewById(R.id.forget_email_address);
+        mForgotPassword1TextView = findViewById(R.id.forget_new_password);
+        mForgotPassword2TextView = findViewById(R.id.forget_confirm_new_password);
 
         mHomeServerOptionLayout = findViewById(R.id.homeserver_layout);
-        mHomeServerText = (EditText) findViewById(R.id.login_matrix_server_url);
-        mIdentityServerText = (EditText) findViewById(R.id.login_identity_url);
+        mHomeServerText = findViewById(R.id.login_matrix_server_url);
+        mIdentityServerText = findViewById(R.id.login_identity_url);
 
-        mLoginButton = (Button) findViewById(R.id.button_login);
-        mRegisterButton = (Button) findViewById(R.id.button_register);
-        mForgotPasswordButton = (Button) findViewById(R.id.button_reset_password);
-        mForgotValidateEmailButton = (Button) findViewById(R.id.button_forgot_email_validate);
+        mLoginButton = findViewById(R.id.button_login);
+        mRegisterButton = findViewById(R.id.button_register);
+        mForgotPasswordButton = findViewById(R.id.button_reset_password);
+        mForgotValidateEmailButton = findViewById(R.id.button_forgot_email_validate);
 
         mHomeServerUrlsLayout = findViewById(R.id.login_matrix_server_options_layout);
-        mUseCustomHomeServersCheckbox = (CheckBox) findViewById(R.id.display_server_url_expand_checkbox);
+        mUseCustomHomeServersCheckbox = findViewById(R.id.display_server_url_expand_checkbox);
 
-        mProgressTextView = (TextView) findViewById(R.id.flow_progress_message_textview);
+        mProgressTextView = findViewById(R.id.flow_progress_message_textview);
 
         mMainLayout = findViewById(R.id.main_input_layout);
         mButtonsView = findViewById(R.id.login_actions_bar);
@@ -491,7 +485,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             @Override
             public boolean onEditorAction(TextView view, int actionId, KeyEvent event) {
                 if (actionId == EditorInfo.IME_ACTION_DONE) {
-                    onHomeServerUrlUpdate();
+                    onHomeServerUrlUpdate(true);
                     return true;
                 }
 
@@ -503,7 +497,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
         mHomeServerText.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             public void onFocusChange(View v, boolean hasFocus) {
                 if (!hasFocus) {
-                    onHomeServerUrlUpdate();
+                    onHomeServerUrlUpdate(true);
                 }
             }
         });
@@ -513,7 +507,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             @Override
             public boolean onEditorAction(TextView view, int actionId, KeyEvent event) {
                 if (actionId == EditorInfo.IME_ACTION_DONE) {
-                    onIdentityserverUrlUpdate();
+                    onIdentityserverUrlUpdate(true);
                     return true;
                 }
 
@@ -525,7 +519,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
         mIdentityServerText.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             public void onFocusChange(View v, boolean hasFocus) {
                 if (!hasFocus) {
-                    onIdentityserverUrlUpdate();
+                    onIdentityserverUrlUpdate(true);
                 }
             }
         });
@@ -548,18 +542,18 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                         // reset the HS urls.
                         mHomeServerUrl = null;
                         mIdentityServerUrl = null;
-                        onIdentityserverUrlUpdate();
-                        onHomeServerUrlUpdate();
+                        onIdentityserverUrlUpdate(false);
+                        onHomeServerUrlUpdate(false);
                         refreshDisplay();
                     }
                 });
             }
         });
 
-        mLoginPhoneNumberHandler = new PhoneNumberHandler(this, mLoginPhoneNumber, mLoginPhoneNumberCountryCode,
+        mLoginPhoneNumberHandler = new PhoneNumberHandler(this, loginPhoneNumber, loginPhoneNumberCountryCode,
                 PhoneNumberHandler.DISPLAY_COUNTRY_ISO_CODE, REQUEST_LOGIN_COUNTRY);
         mLoginPhoneNumberHandler.setCountryCode(PhoneNumberUtils.getCountryCode(this));
-        mRegistrationPhoneNumberHandler = new PhoneNumberHandler(this, mPhoneNumber, mPhoneNumberCountryCode,
+        mRegistrationPhoneNumberHandler = new PhoneNumberHandler(this, mPhoneNumber, phoneNumberCountryCode,
                 PhoneNumberHandler.DISPLAY_COUNTRY_ISO_CODE, REQUEST_REGISTRATION_COUNTRY);
 
         refreshDisplay();
@@ -626,10 +620,23 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
     }
 
     /**
+     * The server URLs have been updated from a receiver
+     */
+    public void onServerUrlsUpdate() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(LoginActivity.this);
+        mHomeServerText.setText(preferences.getString(HOME_SERVER_URL_PREF, getResources().getString(R.string.default_hs_server_url)));
+        mIdentityServerText.setText(preferences.getString(IDENTITY_SERVER_URL_PREF, getResources().getString(R.string.default_identity_server_url)));
+
+        if (!mUseCustomHomeServersCheckbox.isChecked()) {
+            mUseCustomHomeServersCheckbox.performClick();
+        }
+    }
+
+    /**
      * @return the home server Url according to custom HS checkbox
      */
     private String getHomeServerUrl() {
-        String url = getResources().getString(R.string.default_hs_server_url);
+        String url = PreferenceManager.getDefaultSharedPreferences(LoginActivity.this).getString(HOME_SERVER_URL_PREF, getResources().getString(R.string.default_hs_server_url));
 
         if (mUseCustomHomeServersCheckbox.isChecked()) {
             url = mHomeServerText.getText().toString().trim();
@@ -646,7 +653,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
      * @return the identity server URL according to custom HS checkbox
      */
     private String getIdentityServerUrl() {
-        String url = getResources().getString(R.string.default_identity_server_url);
+        String url = PreferenceManager.getDefaultSharedPreferences(LoginActivity.this).getString(IDENTITY_SERVER_URL_PREF, getResources().getString(R.string.default_hs_server_url));
 
         if (mUseCustomHomeServersCheckbox.isChecked()) {
             url = mIdentityServerText.getText().toString().trim();
@@ -692,9 +699,10 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
     /**
      * Check if the home server url has been updated
      *
+     * @param checkFlowOnUpdate check the flow on IS update
      * @return true if the HS url has been updated
      */
-    private boolean onHomeServerUrlUpdate() {
+    private boolean onHomeServerUrlUpdate(boolean checkFlowOnUpdate) {
         if (!TextUtils.equals(mHomeServerUrl, getHomeServerUrl())) {
             mHomeServerUrl = getHomeServerUrl();
             mRegistrationResponse = null;
@@ -704,7 +712,9 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             // the account creation is not always supported so ensure that the dedicated button is always displayed.
             mRegisterButton.setVisibility(View.VISIBLE);
 
-            checkFlows();
+            if (checkFlowOnUpdate) {
+                checkFlows();
+            }
 
             return true;
         }
@@ -715,9 +725,10 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
     /**
      * Check if the identity server url has been updated
      *
+     * @param checkFlowOnUpdate check the flow on IS update
      * @return true if the IS url has been updated
      */
-    private boolean onIdentityserverUrlUpdate() {
+    private boolean onIdentityserverUrlUpdate(boolean checkFlowOnUpdate) {
         if (!TextUtils.equals(mIdentityServerUrl, getIdentityServerUrl())) {
             mIdentityServerUrl = getIdentityServerUrl();
             mRegistrationResponse = null;
@@ -727,7 +738,9 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             // the account creation is not always supported so ensure that the dedicated button is always displayed.
             mRegisterButton.setVisibility(View.VISIBLE);
 
-            checkFlows();
+            if (checkFlowOnUpdate) {
+                checkFlows();
+            }
 
             return true;
         }
@@ -1457,6 +1470,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
     private void showMainLayout() {
         mMainLayout.setVisibility(View.VISIBLE);
         mProgressTextView.setVisibility(View.GONE);
+        mButtonsView.setVisibility(View.VISIBLE);
     }
 
     /**
@@ -1521,8 +1535,9 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
      * Dismiss the keyboard and save the updated values
      */
     private void onClick() {
-        onIdentityserverUrlUpdate();
-        onHomeServerUrlUpdate();
+        onIdentityserverUrlUpdate(false);
+        onHomeServerUrlUpdate(false);
+        checkFlows();
 
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.hideSoftInputFromWindow(mHomeServerText.getWindowToken(), 0);
@@ -1532,7 +1547,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
      * The user clicks on the login button
      */
     private void onLoginClick() {
-        if (onHomeServerUrlUpdate() || onIdentityserverUrlUpdate()) {
+        if (onHomeServerUrlUpdate(true) || onIdentityserverUrlUpdate(true)) {
             mIsPendingLogin = true;
             Log.d(LOG_TAG, "## onLoginClick() : The user taps on login but the IS/HS did not loos the focus");
             return;
@@ -1577,7 +1592,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             return;
         }
 
-        if (TextUtils.isEmpty(username) && !mLoginPhoneNumberHandler.isPhoneNumberValidForCountry()){
+        if (TextUtils.isEmpty(username) && !mLoginPhoneNumberHandler.isPhoneNumberValidForCountry()) {
             // Check if phone number is empty or just invalid
             if (mLoginPhoneNumberHandler.getPhoneNumber() != null) {
                 Toast.makeText(this, R.string.auth_invalid_phone, Toast.LENGTH_SHORT).show();
@@ -1864,7 +1879,6 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
         threePidLayout.setVisibility((mMode == MODE_ACCOUNT_CREATION_THREE_PID) ? View.VISIBLE : View.GONE);
 
         boolean isLoginMode = mMode == MODE_LOGIN;
-        boolean isForgetPasswordMode = (mMode == MODE_FORGOT_PASSWORD) || (mMode == MODE_FORGOT_PASSWORD_WAITING_VALIDATION);
 
         mButtonsView.setVisibility(View.VISIBLE);
 
@@ -1941,6 +1955,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
 
     /**
      * Sanitize an URL
+     *
      * @param url the url to sanitize
      * @return the sanitized url
      */
@@ -1949,7 +1964,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             return url;
         }
 
-        return url.replaceAll("\\s","");
+        return url.replaceAll("\\s", "");
     }
 
     /**
@@ -2219,7 +2234,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 button.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-                        final TextInputEditText tokenView = (TextInputEditText) dialogLayout.findViewById(R.id.phone_number_code_value);
+                        final TextInputEditText tokenView = dialogLayout.findViewById(R.id.phone_number_code_value);
                         submitPhoneNumber(tokenView.getText().toString(), pid);
                     }
                 });
@@ -2233,7 +2248,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
      * Submit the phone number token entered by the user
      *
      * @param token code entered by the user
-     * @param pid phone number pid
+     * @param pid   phone number pid
      */
     private void submitPhoneNumber(final String token, final ThreePid pid) {
         if (TextUtils.isEmpty(token)) {
@@ -2298,7 +2313,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                     .show();
         } else {
             // TODo manage multi accounts
-            Matrix.getInstance(this).getDefaultSession().createRoomDirectMessage("@riot-bot:matrix.org", new ApiCallback<String>() {
+            Matrix.getInstance(this).getDefaultSession().createDirectMessageRoom("@riot-bot:matrix.org", new ApiCallback<String>() {
                 @Override
                 public void onSuccess(String info) {
                     Log.d(LOG_TAG, "## onRegistrationSuccess() : succeed to invite riot-bot");

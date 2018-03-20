@@ -59,12 +59,12 @@ public class WidgetsManager {
     /**
      * Known types widgets.
      */
-    public static final String WIDGET_TYPE_JITSI = "jitsi";
+    private static final String WIDGET_TYPE_JITSI = "jitsi";
 
     /**
      * Integration rest url
      */
-    public static final String INTEGRATION_REST_URL = "https://scalar.vector.im";
+    private static final String INTEGRATION_REST_URL = "https://scalar.vector.im";
 
     /**
      * Integration ui url
@@ -132,7 +132,7 @@ public class WidgetsManager {
      * @param excludedTypes the the excluded widget types
      * @return the active widgets list
      */
-    public List<Widget> getActiveWidgets(final MXSession session, final Room room, final Set<String> widgetTypes, final Set<String> excludedTypes) {
+    private List<Widget> getActiveWidgets(final MXSession session, final Room room, final Set<String> widgetTypes, final Set<String> excludedTypes) {
         // Get all im.vector.modular.widgets state events in the room
         List<Event> widgetEvents = room.getLiveState().getStateEvents(new HashSet<>(Arrays.asList(WIDGET_EVENT_TYPE)));
 
@@ -183,6 +183,11 @@ public class WidgetsManager {
                 Widget widget = null;
 
                 try {
+                    if (null == widgetEvent.roomId) {
+                        Log.e(LOG_TAG, "## getWidgets() : set the room id to the event " + widgetEvent.eventId);
+                        widgetEvent.roomId = room.getRoomId();
+                    }
+
                     widget = new Widget(session, widgetEvent);
                 } catch (Exception e) {
                     Log.e(LOG_TAG, "## getWidgets() : widget creation failed " + e.getMessage());
@@ -257,7 +262,7 @@ public class WidgetsManager {
      * @param content  the widget content.
      * @param callback the asynchronous callback
      */
-    public void createWidget(MXSession session, Room room, String widgetId, Map<String, Object> content, final ApiCallback<Widget> callback) {
+    private void createWidget(MXSession session, Room room, String widgetId, Map<String, Object> content, final ApiCallback<Widget> callback) {
         WidgetError permissionError = checkWidgetPermission(session, room);
 
         if (null != permissionError) {
@@ -328,7 +333,7 @@ public class WidgetsManager {
             widgetSessionId = widgetSessionId.substring(0, 7);
         }
         String roomId = room.getRoomId();
-        String confId = roomId.substring(1, roomId.indexOf(":") - 1) + widgetSessionId.toLowerCase();
+        String confId = roomId.substring(1, roomId.indexOf(":") - 1) + widgetSessionId.toLowerCase(VectorApp.getApplicationLocale());
 
         // TODO: This url may come from scalar API
         // Note: this url can be used as is inside a web container (like iframe for Riot-web)
@@ -355,18 +360,21 @@ public class WidgetsManager {
      * @param callback the asynchronous callback
      */
     public void closeWidget(MXSession session, Room room, String widgetId, final ApiCallback<Void> callback) {
-        WidgetError permissionError = checkWidgetPermission(session, room);
+        // sanity checks
+        if ((null != session) && (null != room) && (null != widgetId)) {
+            WidgetError permissionError = checkWidgetPermission(session, room);
 
-        if (null != permissionError) {
-            if (null != callback) {
-                callback.onMatrixError(permissionError);
+            if (null != permissionError) {
+                if (null != callback) {
+                    callback.onMatrixError(permissionError);
+                }
+                return;
             }
-            return;
-        }
 
-        // Send a state event with the widget data
-        // TODO: This API will be shortly replaced by a pure scalar API
-        session.getRoomsApiClient().sendStateEvent(room.getRoomId(), WIDGET_EVENT_TYPE, widgetId, new HashMap<String, Object>(), callback);
+            // Send a state event with the widget data
+            // TODO: This API will be shortly replaced by a pure scalar API
+            session.getRoomsApiClient().sendStateEvent(room.getRoomId(), WIDGET_EVENT_TYPE, widgetId, new HashMap<String, Object>(), callback);
+        }
     }
 
     public interface onWidgetUpdateListener {

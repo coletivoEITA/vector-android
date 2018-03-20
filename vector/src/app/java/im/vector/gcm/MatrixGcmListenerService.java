@@ -17,6 +17,7 @@
 
 package im.vector.gcm;
 
+import org.matrix.androidsdk.data.Room;
 import org.matrix.androidsdk.util.Log;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -33,13 +34,13 @@ import im.vector.Matrix;
 import im.vector.VectorApp;
 import im.vector.activity.CommonActivityUtils;
 import im.vector.services.EventStreamService;
+import im.vector.util.VectorUtils;
 
 /**
  * Class implementing GcmListenerService.
  */
 public class MatrixGcmListenerService extends FirebaseMessagingService {
-
-    private static final String LOG_TAG = "GcmListenerService";
+    private static final String LOG_TAG = MatrixGcmListenerService.class.getSimpleName();
 
     // Tells if the events service running state has been tested
     private Boolean mCheckLaunched = false;
@@ -49,22 +50,26 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
 
     /**
      * Try to create an event from the GCM data
+     *
      * @param data the GCM data
      * @return the event
      */
     private Event parseEvent(Map<String, String> data) {
         // accept only event with room id.
-        if ((null == data) || !data.containsKey("room_id") || !data.containsKey("id")) {
+        if ((null == data) || !data.containsKey("room_id") || !data.containsKey("event_id")) {
             return null;
         }
 
         try {
             Event event = new Event();
-            event.eventId = data.get("id");
+            event.eventId = data.get("event_id");
             event.sender = data.get("sender");
             event.roomId = data.get("room_id");
             event.setType(data.get("type"));
-            event.updateContent((new JsonParser()).parse(data.get("content")).getAsJsonObject());
+
+            if (data.containsKey("content")) {
+                event.updateContent((new JsonParser()).parse(data.get("content")).getAsJsonObject());
+            }
 
             return event;
         } catch (Exception e) {
@@ -95,8 +100,8 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
                     roomId = data.get("room_id");
                 }
 
-                if (data.containsKey("id")) {
-                    eventId = data.get("id");
+                if (data.containsKey("event_id")) {
+                    eventId = data.get("event_id");
                 }
             }
 
@@ -111,18 +116,25 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
                 Log.d(LOG_TAG, "## onMessageReceivedInternal() : the notifications are disabled");
                 return;
             }
-
             if (!gcmManager.isBackgroundSyncAllowed() && VectorApp.isAppInBackground()) {
-                Log.d(LOG_TAG, "## onMessageReceivedInternal() : the background sync is disabled");
-
                 EventStreamService eventStreamService = EventStreamService.getInstance();
+                Event event = parseEvent(data);
 
-                if (null != eventStreamService) {
-                    eventStreamService.onNotifiedEventWithBackgroundSyncDisabled(parseEvent(data), data.get("room_name"), data.get("sender_display_name"), unreadCount);
-                } else {
-                    Log.d(LOG_TAG, "## onMessageReceivedInternal() : there is no event service so nothing is done");
+                String roomName = data.get("room_name");
+                if ((null == roomName) && (null != roomId)) {
+                    MXSession session = Matrix.getInstance(getApplicationContext()).getDefaultSession();
+
+                    if ((null != session) && session.getDataHandler().getStore().isReady()) {
+                        Room room = session.getDataHandler().getStore().getRoom(roomId);
+                        if (null != room) {
+                            roomName = VectorUtils.getRoomDisplayName(MatrixGcmListenerService.this, session, room);
+                        }
+                    }
                 }
 
+                Log.d(LOG_TAG, "## onMessageReceivedInternal() : the background sync is disabled with eventStreamService " + eventStreamService);
+
+                EventStreamService.onStaticNotifiedEvent(getApplicationContext(), event, roomName, data.get("sender_display_name"), unreadCount);
                 return;
             }
 
@@ -179,6 +191,6 @@ public class MatrixGcmListenerService extends FirebaseMessagingService {
             public void run() {
                 onMessageReceivedInternal(data);
             }
-        });  onMessageReceivedInternal(data);
+        });
     }
 }

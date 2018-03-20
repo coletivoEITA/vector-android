@@ -37,14 +37,12 @@ import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.data.Room;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.ThreePid;
 import org.matrix.androidsdk.util.Log;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import im.vector.Matrix;
 import im.vector.R;
-import im.vector.VectorApp;
 import im.vector.widgets.Widget;
 import im.vector.widgets.WidgetsManager;
 
@@ -145,7 +143,7 @@ public class WidgetActivity extends RiotAppCompatActivity {
         mCloseWidgetIcon.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                new AlertDialog.Builder(VectorApp.getCurrentActivity())
+                new AlertDialog.Builder(WidgetActivity.this)
                         .setMessage(R.string.widget_delete_message_confirmation)
                         .setPositiveButton(R.string.remove, new DialogInterface.OnClickListener() {
                             @Override
@@ -328,7 +326,7 @@ public class WidgetActivity extends RiotAppCompatActivity {
     @Override
     protected void onDestroy() {
         if (null != mWidgetWebView) {
-            ((ViewGroup)(mWidgetWebView.getParent())).removeView(mWidgetWebView);
+            ((ViewGroup) (mWidgetWebView.getParent())).removeView(mWidgetWebView);
             mWidgetWebView.removeAllViews();
             mWidgetWebView.destroy();
             mWidgetWebView = null;

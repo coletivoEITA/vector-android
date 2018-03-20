@@ -25,8 +25,8 @@ import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.PublicRoom;
-import org.matrix.androidsdk.rest.model.PublicRoomsResponse;
+import org.matrix.androidsdk.rest.model.publicroom.PublicRoom;
+import org.matrix.androidsdk.rest.model.publicroom.PublicRoomsResponse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ import java.util.List;
  * Manage the public rooms
  */
 public class PublicRoomsManager {
-    private static final String LOG_TAG = "PublicRoomsManager";
+    private static final String LOG_TAG = PublicRoomsManager.class.getSimpleName();
 
     public static final int PUBLIC_ROOMS_LIMIT = 20;
 

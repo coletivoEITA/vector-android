@@ -36,7 +36,6 @@ import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.util.Log;
 
-import java.net.URL;
 import java.util.Map;
 
 import butterknife.BindView;
@@ -133,7 +132,19 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
         }
 
         mSession = Matrix.getMXSession(this, mWidget.getSessionId());
+        if (null == mSession) {
+            Log.e(LOG_TAG, "## onCreate() : undefined session ");
+            this.finish();
+            return;
+        }
+
+
         mRoom = mSession.getDataHandler().getRoom(mWidget.getRoomId());
+        if (null == mRoom) {
+            Log.e(LOG_TAG, "## onCreate() : undefined room " + mWidget.getRoomId());
+            this.finish();
+            return;
+        }
 
         mJitsiView = new JitsiMeetView(this);
 
@@ -217,7 +228,7 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
             this.finish();
         }
 
-        RelativeLayout layout = (RelativeLayout) findViewById(R.id.call_layout);
+        RelativeLayout layout = findViewById(R.id.call_layout);
         RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT);
         params.addRule(RelativeLayout.CENTER_IN_PARENT, RelativeLayout.TRUE);
         layout.setVisibility(View.VISIBLE);
@@ -263,6 +274,11 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
             @Override
             public void onConferenceWillLeave(Map<String, Object> map) {
                 Log.d(LOG_TAG, "## onConferenceWillLeave() : " + map);
+            }
+
+            @Override
+            public void onLoadConfigError(Map<String, Object> data) {
+                Log.d(LOG_TAG, "## onLoadConfigError() : " + data);
             }
         });
     }

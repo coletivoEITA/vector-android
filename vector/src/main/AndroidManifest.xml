@@ -21,6 +21,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- required on android 6.0.0 devices -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
     <!-- shared files from external application -->
     <uses-permission android:name="android.permission.MANAGE_DOCUMENTS" />
@@ -30,6 +33,9 @@
 
     <!-- start the background sync on boot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- disable the battery optimisation on some devices to let the background sync works -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <!-- videocall feature-->
     <!-- android.permission.CAMERA defines android.hardware.camera -->
@@ -69,7 +75,9 @@
     <uses-permission android:name="com.majeur.launcher.permission.UPDATE_BADGE" />
 
     <!-- bluetooth headset -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
+
     <uses-feature
         android:name="android.hardware.bluetooth"
         android:required="false"
@@ -95,7 +103,7 @@
             android:name="im.vector.activity.LoginActivity"
             android:configChanges="orientation|screenSize"
             android:theme="@style/LoginAppTheme"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -117,10 +125,17 @@
             android:name="im.vector.activity.FallbackLoginActivity"
             android:configChanges="orientation|screenSize"
             android:label="@string/login"></activity>
+
         <activity
             android:name="im.vector.activity.SplashActivity"
             android:configChanges="orientation|screenSize"
             android:theme="@style/AppTheme.NoActionBar"></activity>
+
+        <activity
+            android:name="im.vector.activity.LoggingOutActivity"
+            android:configChanges="orientation|screenSize"
+            android:theme="@style/AppTheme.NoActionBar"></activity>
+
         <activity
             android:name="im.vector.activity.VectorHomeActivity"
             android:configChanges="orientation|screenSize"
@@ -212,15 +227,6 @@
             android:theme="@android:style/Theme.Holo.Light.Dialog" />
 
         <activity
-            android:name="im.vector.activity.InComingCallActivity"
-            android:clearTaskOnLaunch="true"
-            android:configChanges="orientation|screenSize"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
-            android:theme="@style/CallAppTheme" />
-
-        <activity
             android:name="im.vector.activity.VectorMediasViewerActivity"
             android:configChanges="orientation|screenSize"
             android:label="a filename"
@@ -255,7 +261,6 @@
 
         <activity
             android:name="im.vector.activity.VectorMediasPickerActivity"
-            android:configChanges="orientation|screenSize"
             android:label="@string/media_picker_both_capture_title"
             android:launchMode="singleTop"
             android:parentActivityName="im.vector.activity.VectorRoomActivity"
@@ -305,6 +310,21 @@
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="im.vector.activity.VectorHomeActivity" />
+        </activity>
+
+        <activity
+            android:name="im.vector.activity.BugReportActivity"
+            android:configChanges="orientation|screenSize"
+            android:label="@string/title_activity_bug_report"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+
+        <activity
+            android:name="im.vector.activity.VectorGroupDetailsActivity"
+            android:configChanges="orientation|screenSize"
+            android:label="@string/title_activity_group_details"
+            android:launchMode="singleTop"
+            android:theme="@style/GroupAppTheme"
+            android:windowSoftInputMode="adjustResize">
         </activity>
 
         <activity android:name=".activity.VectorUniversalLinkActivity">
@@ -453,6 +473,16 @@
 
         <receiver android:name="im.vector.receiver.DismissNotificationReceiver"/>
 
+        <receiver
+            android:name="im.vector.receiver.VectorReferrerReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.android.vending.INSTALL_REFERRER" />
+            </intent-filter>
+        </receiver>
+
+
         <!-- Shared items  -->
         <activity
             android:name=".activity.VectorSharedFilesActivity"
@@ -473,11 +503,6 @@
         </activity>
 
         <service android:name="im.vector.services.EventStreamService" />
-
-        <provider
-            android:name="im.vector.db.VectorContentProvider"
-            android:authorities="im.vector.VectorApp.provider"
-            android:exported="true" />
     </application>
 
 </manifest>

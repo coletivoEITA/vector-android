@@ -21,6 +21,8 @@ import android.content.DialogInterface;
 import android.support.v7.app.AlertDialog;
 import android.view.LayoutInflater;
 
+import org.matrix.androidsdk.ssl.CertUtil;
+import org.matrix.androidsdk.ssl.UnrecognizedCertificateException;
 import org.matrix.androidsdk.util.Log;
 
 import android.view.View;
@@ -33,11 +35,36 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 public class UnrecognizedCertHandler {
-    private static final String LOG_TAG = "UnrecognizedCertHandler";
+    private static final String LOG_TAG = UnrecognizedCertHandler.class.getSimpleName();
 
     private static final HashMap<String, HashSet<Fingerprint>> ignoredFingerprints = new HashMap<>();
     private static final HashSet<String> openDialogIds = new HashSet<>();
 
+    /**
+     * Handle a network exception and display a dialog box if it's a certificate exception
+     * @param e the exception
+     * @param callback callback to fire when the user makes a decision
+     * @return true if an exception was handled, false otherwise
+     */
+    public static boolean handle(final HomeServerConnectionConfig hsConfig, final Exception e, final Callback callback) {
+        UnrecognizedCertificateException unrecCertEx = CertUtil.getCertificateException(e);
+        if (unrecCertEx != null) {
+            final Fingerprint fingerprint = unrecCertEx.getFingerprint();
+            UnrecognizedCertHandler.show(hsConfig, fingerprint, false, callback);
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    /**
+     * Display a certificate dialog box, asking the user about an unknown certificate
+     * @param hsConfig the homeserver configuration
+     * @param unrecognizedFingerprint the fingerprint for the unknown certificate
+     * @param existing the certificate is existing
+     * @param callback callback to fire when the user makes a decision
+     */
     public static void show(final HomeServerConnectionConfig hsConfig, final Fingerprint unrecognizedFingerprint, boolean existing, final Callback callback) {
         final Activity activity = VectorApp.getCurrentActivity();
 
@@ -71,15 +98,15 @@ public class UnrecognizedCertHandler {
 
         View layout = inflater.inflate(R.layout.ssl_fingerprint_prompt, null);
 
-        TextView sslFingerprintTitle = (TextView) layout.findViewById(R.id.ssl_fingerprint_title);
+        TextView sslFingerprintTitle = layout.findViewById(R.id.ssl_fingerprint_title);
         sslFingerprintTitle.setText(
-                String.format(activity.getString(R.string.ssl_fingerprint_hash), unrecognizedFingerprint.getType().toString())
+                String.format(VectorApp.getApplicationLocale(), activity.getString(R.string.ssl_fingerprint_hash), unrecognizedFingerprint.getType().toString())
         );
 
-        TextView sslFingerprint = (TextView) layout.findViewById(R.id.ssl_fingerprint);
+        TextView sslFingerprint = layout.findViewById(R.id.ssl_fingerprint);
         sslFingerprint.setText(unrecognizedFingerprint.getBytesAsHexString());
 
-        TextView sslUserId = (TextView) layout.findViewById(R.id.ssl_user_id);
+        TextView sslUserId = layout.findViewById(R.id.ssl_user_id);
         if (hsConfig.getCredentials() != null) {
             sslUserId.setText(
                     activity.getString(R.string.username) + ":  " + hsConfig.getCredentials().userId
@@ -90,7 +117,7 @@ public class UnrecognizedCertHandler {
             );
         }
 
-        TextView sslExpl = (TextView) layout.findViewById(R.id.ssl_explanation);
+        TextView sslExpl = layout.findViewById(R.id.ssl_explanation);
         if (existing) {
             if (hsConfig.getAllowedFingerprints().size() > 0) {
                 sslExpl.setText(activity.getString(R.string.ssl_expected_existing_expl));
@@ -170,10 +197,19 @@ public class UnrecognizedCertHandler {
     }
 
     public interface Callback {
+        /**
+         * The certificate was explicitely accepted
+         */
         void onAccept();
 
+        /**
+         * The warning was ignored by the user
+         */
         void onIgnore();
 
+        /**
+         * The unknown certificate was explicitely rejected
+         */
         void onReject();
     }
 }
