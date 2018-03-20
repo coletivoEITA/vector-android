@@ -68,10 +68,6 @@ public class ParticipantAdapterItem implements java.io.Serializable {
     private String mComparisonDisplayName;
     private static final String mTrimRegEx = "[_!~`@#$%^&*\\-+();:=\\{\\}\\[\\],.<>?]";
 
-    // auto reference fields to speed up search
-    public int mReferenceGroupPosition = -1;
-    public int mReferenceChildPosition = -1;
-
     /**
      * Constructor from a room member.
      *
@@ -140,11 +136,11 @@ public class ParticipantAdapterItem implements java.io.Serializable {
      */
     private void initSearchByPatternFields() {
         if (!TextUtils.isEmpty(mDisplayName)) {
-            mLowerCaseDisplayName = mDisplayName.toLowerCase();
+            mLowerCaseDisplayName = mDisplayName.toLowerCase(VectorApp.getApplicationLocale());
         }
 
         if (!TextUtils.isEmpty(mUserId)) {
-            mLowerCaseMatrixId = mUserId.toLowerCase();
+            mLowerCaseMatrixId = mUserId.toLowerCase(VectorApp.getApplicationLocale());
         }
     }
 
@@ -356,7 +352,7 @@ public class ParticipantAdapterItem implements java.io.Serializable {
 
                 if (componentsArrays.length > 0) {
                     for (int i = 0; i < componentsArrays.length; i++) {
-                        mDisplayNameComponents.add(componentsArrays[i].trim().toLowerCase());
+                        mDisplayNameComponents.add(componentsArrays[i].trim().toLowerCase(VectorApp.getApplicationLocale()));
                     }
                 }
             }
@@ -368,7 +364,7 @@ public class ParticipantAdapterItem implements java.io.Serializable {
                 }
             }
         }
-        
+
         // test user id
         if (!TextUtils.isEmpty(mLowerCaseMatrixId) && mLowerCaseMatrixId.startsWith((prefix.startsWith("@") ? "" : "@") + prefix)) {
             return true;
@@ -450,7 +446,7 @@ public class ParticipantAdapterItem implements java.io.Serializable {
 
         // for the matrix users, append the matrix id to see the difference
         if (null == mContact) {
-            String lowerCaseDisplayname = displayname.toLowerCase();
+            String lowerCaseDisplayname = displayname.toLowerCase(VectorApp.getApplicationLocale());
 
             // detect if the username is used by several users
             int pos = -1;
@@ -479,6 +475,7 @@ public class ParticipantAdapterItem implements java.io.Serializable {
 
     /**
      * Tries to retrieve the PIDs.
+     *
      * @return true if they are retrieved.
      */
     public boolean retrievePids() {

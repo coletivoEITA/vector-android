@@ -44,7 +44,7 @@ import org.matrix.androidsdk.listeners.MXEventListener;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.model.Event;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.Search.SearchUsersResponse;
+import org.matrix.androidsdk.rest.model.search.SearchUsersResponse;
 import org.matrix.androidsdk.rest.model.User;
 import org.matrix.androidsdk.util.Log;
 
@@ -68,7 +68,6 @@ import im.vector.view.EmptyViewItemDecoration;
 import im.vector.view.SimpleDividerItemDecoration;
 
 public class PeopleFragment extends AbsHomeFragment implements ContactsManager.ContactsManagerListener, AbsHomeFragment.OnRoomChangedListener {
-
     private static final String LOG_TAG = PeopleFragment.class.getSimpleName();
 
     private static final String MATRIX_USER_ONLY_PREF_KEY = "MATRIX_USER_ONLY_PREF_KEY";
@@ -78,7 +77,7 @@ public class PeopleFragment extends AbsHomeFragment implements ContactsManager.C
     @BindView(R.id.recyclerview)
     RecyclerView mRecycler;
 
-    CheckBox mMatrixUserOnlyCheckbox;
+    private CheckBox mMatrixUserOnlyCheckbox;
 
     private PeopleAdapter mAdapter;
 
@@ -244,7 +243,7 @@ public class PeopleFragment extends AbsHomeFragment implements ContactsManager.C
         mAdapter = new PeopleAdapter(getActivity(), new PeopleAdapter.OnSelectItemListener() {
             @Override
             public void onSelectItem(Room room, int position) {
-               openRoom(room);
+                openRoom(room);
             }
 
             @Override
@@ -285,7 +284,7 @@ public class PeopleFragment extends AbsHomeFragment implements ContactsManager.C
             Log.e(LOG_TAG, "## initDirectChatsData() : null session");
         }
 
-        final List<String> directChatIds = mSession.getDirectChatRoomIdsList();
+        final List<String> directChatIds = mSession.getDataHandler().getDirectChatRoomIdsList();
         final MXDataHandler dataHandler = mSession.getDataHandler();
         final IMXStore store = dataHandler.getStore();
 
@@ -373,14 +372,14 @@ public class PeopleFragment extends AbsHomeFragment implements ContactsManager.C
      * Display the public rooms loading view
      */
     private void showKnownContactLoadingView() {
-        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount()-1).showLoadingView();
+        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount() - 1).showLoadingView();
     }
 
     /**
      * Hide the public rooms loading view
      */
     private void hideKnownContactLoadingView() {
-        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount()-1).hideLoadingView();
+        mAdapter.getSectionViewForSectionIndex(mAdapter.getSectionsCount() - 1).hideLoadingView();
     }
 
     /**
@@ -601,13 +600,18 @@ public class PeopleFragment extends AbsHomeFragment implements ContactsManager.C
 
     @Override
     public void onToggleDirectChat(String roomId, boolean isDirectChat) {
-        if(!isDirectChat){
-           mAdapter.removeDirectChat(roomId);
+        if (!isDirectChat) {
+            mAdapter.removeDirectChat(roomId);
         }
     }
 
     @Override
     public void onRoomLeft(String roomId) {
+        mAdapter.removeDirectChat(roomId);
+    }
+
+    @Override
+    public void onRoomForgot(String roomId) {
         mAdapter.removeDirectChat(roomId);
     }
 }

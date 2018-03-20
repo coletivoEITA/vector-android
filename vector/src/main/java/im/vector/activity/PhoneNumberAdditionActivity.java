@@ -40,7 +40,7 @@ import com.google.i18n.phonenumbers.Phonenumber;
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.model.MatrixError;
-import org.matrix.androidsdk.rest.model.ThreePid;
+import org.matrix.androidsdk.rest.model.pid.ThreePid;
 import org.matrix.androidsdk.util.Log;
 
 import im.vector.Matrix;
@@ -99,21 +99,26 @@ public class PhoneNumberAdditionActivity extends RiotAppCompatActivity implement
         setTitle(R.string.settings_add_phone_number);
         setContentView(R.layout.activity_phone_number_addition);
 
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         if (null != getSupportActionBar()) {
             getSupportActionBar().setDisplayShowHomeEnabled(true);
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
-        mCountry = (TextInputEditText) findViewById(R.id.phone_number_country_value);
-        mCountryLayout = (TextInputLayout) findViewById(R.id.phone_number_country);
-        mPhoneNumber = (TextInputEditText) findViewById(R.id.phone_number_value);
-        mPhoneNumberLayout = (TextInputLayout) findViewById(R.id.phone_number);
+        mCountry = findViewById(R.id.phone_number_country_value);
+        mCountryLayout = findViewById(R.id.phone_number_country);
+        mPhoneNumber = findViewById(R.id.phone_number_value);
+        mPhoneNumberLayout = findViewById(R.id.phone_number);
         mLoadingView = findViewById(R.id.loading_view);
 
         final Intent intent = getIntent();
         mSession = Matrix.getInstance(this).getSession(intent.getStringExtra(EXTRA_MATRIX_ID));
+
+        if ((null == mSession) || !mSession.isAlive()) {
+            finish();
+            return;
+        }
 
         initViews();
     }

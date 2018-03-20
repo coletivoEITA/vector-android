@@ -18,20 +18,13 @@ package im.vector.widgets;
 
 import android.text.TextUtils;
 
-import com.google.gson.Gson;
-
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.rest.model.Event;
 
 import java.io.Serializable;
-import java.util.Map;
+import java.net.URLEncoder;
 
 public class Widget implements Serializable {
-    private static final String LOG_TAG = "Widget";
-
-    // JSON parser
-    private static final Gson mGson = new Gson();
-
     private String mWidgetId;
     private Event mWidgetEvent;
     private String mSessionId;
@@ -67,6 +60,16 @@ public class Widget implements Serializable {
             String avatarUrl = session.getMyUser().getAvatarUrl();
             mUrl = mUrl.replace("$matrix_avatar_url", (null != avatarUrl) ? avatarUrl : "");
         }
+
+        if (null != mWidgetContent.data) {
+            for (String key : mWidgetContent.data.keySet()) {
+                Object valueAsVoid = mWidgetContent.data.get(key);
+
+                if (valueAsVoid instanceof String) {
+                    mUrl = mUrl.replace("$" + key, URLEncoder.encode((String) valueAsVoid, "utf-8"));
+                }
+            }
+        }
     }
 
     /**
@@ -97,24 +100,20 @@ public class Widget implements Serializable {
         return mWidgetEvent.roomId;
     }
 
-    public String getType() {
-        return  mWidgetContent.type;
+    private String getType() {
+        return mWidgetContent.type;
     }
 
     public String getUrl() {
         return mUrl;
     }
 
-    public String getName() {
-        return  mWidgetContent.name;
+    private String getName() {
+        return mWidgetContent.name;
     }
 
     public String getHumanName() {
         return mWidgetContent.getHumanName();
-    }
-
-    public Map<String, Object> getData() {
-        return mWidgetContent.data;
     }
 
     @Override

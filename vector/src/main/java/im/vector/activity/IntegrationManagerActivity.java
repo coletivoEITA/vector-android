@@ -22,7 +22,6 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.View;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
@@ -43,6 +42,7 @@ import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.rest.model.PowerLevels;
 import org.matrix.androidsdk.rest.model.RoomMember;
 import org.matrix.androidsdk.util.JsonUtils;
+import org.matrix.androidsdk.util.Log;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -70,8 +70,8 @@ public class IntegrationManagerActivity extends RiotAppCompatActivity {
      */
     public static final String EXTRA_SESSION_ID = "EXTRA_SESSION_ID";
     public static final String EXTRA_ROOM_ID = "EXTRA_ROOM_ID";
-    public static final String EXTRA_WIDGET_ID = "EXTRA_WIDGET_ID";
-    public static final String EXTRA_SCREEN_ID = "EXTRA_SCREEN_ID";
+    private static final String EXTRA_WIDGET_ID = "EXTRA_WIDGET_ID";
+    private static final String EXTRA_SCREEN_ID = "EXTRA_SCREEN_ID";
 
     @BindView(R.id.integration_progress_layout)
     View mProgressLayout;
@@ -128,7 +128,7 @@ public class IntegrationManagerActivity extends RiotAppCompatActivity {
         Intent intent = getIntent();
         mSession = Matrix.getInstance(this).getSession(intent.getStringExtra(EXTRA_SESSION_ID));
 
-        if (null == mSession) {
+        if ((null == mSession) || !mSession.isAlive()) {
             Log.e(LOG_TAG, "## onCreate() : invalid session");
             finish();
             return;
@@ -195,7 +195,7 @@ public class IntegrationManagerActivity extends RiotAppCompatActivity {
 
             @Override
             public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
-                Log.e(LOG_TAG, "## onConsoleMessage() : " + consoleMessage.message() + " line " + consoleMessage.lineNumber() + " source Id" +  consoleMessage.sourceId());
+                Log.e(LOG_TAG, "## onConsoleMessage() : " + consoleMessage.message() + " line " + consoleMessage.lineNumber() + " source Id" + consoleMessage.sourceId());
                 return super.onConsoleMessage(consoleMessage);
             }
         });

@@ -66,7 +66,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import im.vector.R;
-import im.vector.VectorApp;
 import im.vector.activity.CommonActivityUtils;
 import im.vector.activity.MXCActionBarActivity;
 import im.vector.activity.VectorMemberDetailsActivity;
@@ -77,7 +76,7 @@ import im.vector.util.ThemeUtils;
 import im.vector.util.VectorUtils;
 
 public class VectorRoomDetailsMembersFragment extends Fragment {
-    private static final String LOG_TAG = "VectorRoomDetailsMembers";
+    private static final String LOG_TAG = VectorRoomDetailsMembersFragment.class.getSimpleName();
 
     // activity request codes
     private static final int GET_MENTION_REQUEST_CODE = 666;
@@ -441,7 +440,7 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
             mSession = anActivity.getSession();
 
             // GA issue
-            if (null != mSession) {
+            if ((null != mSession) && mSession.isAlive()) {
                 finalizeInit();
             } else {
                 Log.e(LOG_TAG, "## onCreateView : the session is null -> kill the activity");
@@ -555,24 +554,36 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
             mRefreshTimerTask = null;
         }
 
-        mRefreshTimer = new Timer();
-        mRefreshTimerTask = new TimerTask() {
-            public void run() {
-                mUIHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (null != mRefreshTimer) {
-                            mRefreshTimer.cancel();
+        try {
+            mRefreshTimer = new Timer();
+            mRefreshTimerTask = new TimerTask() {
+                public void run() {
+                    mUIHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (null != mRefreshTimer) {
+                                mRefreshTimer.cancel();
+                            }
+                            mRefreshTimer = null;
+                            mRefreshTimerTask = null;
+                            mAdapter.updateRoomMembersDataModel(null);
                         }
-                        mRefreshTimer = null;
-                        mRefreshTimerTask = null;
-                        mAdapter.updateRoomMembersDataModel(null);
-                    }
-                });
-            }
-        };
+                    });
+                }
+            };
 
-        mRefreshTimer.schedule(mRefreshTimerTask, 1000);
+            mRefreshTimer.schedule(mRefreshTimerTask, 1000);
+        } catch (Throwable throwable) {
+            Log.e(LOG_TAG, "## delayedUpdateRoomMembersDataModel() failed " + throwable.getMessage());
+
+            if (null != mRefreshTimer) {
+                mRefreshTimer.cancel();
+                mRefreshTimer = null;
+            }
+
+            mRefreshTimerTask = null;
+            mAdapter.updateRoomMembersDataModel(null);
+        }
     }
 
     /**
@@ -764,9 +775,9 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
         });
 
         // search room members management
-        mPatternToSearchEditText = (EditText) mViewHierarchy.findViewById(R.id.search_value_edit_text);
-        mClearSearchImageView = (ImageView) mViewHierarchy.findViewById(R.id.clear_search_icon_image_view);
-        mSearchNoResultTextView = (TextView) mViewHierarchy.findViewById(R.id.search_no_results_text_view);
+        mPatternToSearchEditText = mViewHierarchy.findViewById(R.id.search_value_edit_text);
+        mClearSearchImageView = mViewHierarchy.findViewById(R.id.clear_search_icon_image_view);
+        mSearchNoResultTextView = mViewHierarchy.findViewById(R.id.search_no_results_text_view);
 
         // add IME search action handler
         mPatternToSearchEditText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
@@ -800,7 +811,7 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
         });
 
         mProgressView = mViewHierarchy.findViewById(R.id.add_participants_progress_view);
-        mParticipantsListView = (ExpandableListView) mViewHierarchy.findViewById(R.id.room_details_members_exp_list_view);
+        mParticipantsListView = mViewHierarchy.findViewById(R.id.room_details_members_exp_list_view);
         mAdapter = new VectorRoomDetailsMembersAdapter(getActivity(), R.layout.adapter_item_vector_add_participants, R.layout.adapter_item_vector_recent_header, mSession, mRoom.getRoomId(), mxMediasCache);
         mParticipantsListView.setAdapter(mAdapter);
         // the group indicator is managed in the adapter (group view creation)
@@ -845,7 +856,7 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
                 String text = getActivity().getString(R.string.room_participants_remove_prompt_msg, participantItem.mDisplayName);
 
                 // The user is trying to leave with unsaved changes. Warn about that
-                new AlertDialog.Builder(VectorApp.getCurrentActivity())
+                new AlertDialog.Builder(getActivity())
                         .setTitle(R.string.dialog_title_confirmation)
                         .setMessage(text)
                         .setPositiveButton(R.string.remove, new DialogInterface.OnClickListener() {
@@ -874,7 +885,7 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
             @Override
             public void onLeaveClick() {
                 // The user is trying to leave with unsaved changes. Warn about that
-                new AlertDialog.Builder(VectorApp.getCurrentActivity())
+                new AlertDialog.Builder(getActivity())
                         .setTitle(R.string.room_participants_leave_prompt_title)
                         .setMessage(getActivity().getString(R.string.room_participants_leave_prompt_msg))
                         .setPositiveButton(R.string.leave, new DialogInterface.OnClickListener() {
@@ -979,6 +990,7 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
 
     /**
      * Invite an user Ids list.
+     *
      * @param userIds the user IDs list
      */
     private void inviteUserIds(List<String> userIds) {
@@ -1018,7 +1030,7 @@ public class VectorRoomDetailsMembersFragment extends Fragment {
      */
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if ((requestCode == INVITE_USER_REQUEST_CODE) && (resultCode == Activity.RESULT_OK)) {
-            final List<String> userIds = (List<String>)data.getSerializableExtra(VectorRoomInviteMembersActivity.EXTRA_OUT_SELECTED_USER_IDS);
+            final List<String> userIds = (List<String>) data.getSerializableExtra(VectorRoomInviteMembersActivity.EXTRA_OUT_SELECTED_USER_IDS);
 
             if ((null != userIds) && (userIds.size() > 0)) {
                 inviteUserIds(userIds);
