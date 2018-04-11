@@ -36,6 +36,10 @@ import org.matrix.androidsdk.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+
 import org.matrix.androidsdk.db.MXMediasCache;
 import org.matrix.androidsdk.rest.model.message.Message;
 import org.matrix.androidsdk.util.ImageUtils;
@@ -50,6 +54,8 @@ import java.util.List;
 
 import im.vector.R;
 import im.vector.activity.VectorRoomActivity;
+import im.vector.cloud.CloudFolder;
+import im.vector.cloud.CloudFoldersResponseListener;
 import im.vector.fragments.ImageSizeSelectionDialogFragment;
 import im.vector.fragments.VectorMessageListFragment;
 
@@ -70,7 +76,18 @@ public class VectorRoomMediasSender {
         void onCancel();
     }
 
-    private AlertDialog mImageSizesListDialog;
+    /**
+     * This listener is displayed when the folder in the cloud has been selected
+     */
+    private interface OnDestinationFolderSelectedListener {
+        // the folder has been successfully selected and the upload starts
+        void onDone();
+
+        // the folder selection has been cancelled
+        void onCancel();
+    }
+
+    private AlertDialog mFolderListDialog;
 
     // the linked room activity
     private final VectorRoomActivity mVectorRoomActivity;
@@ -88,6 +105,7 @@ public class VectorRoomMediasSender {
     // pending
     private List<RoomMediaMessage> mSharedDataItems;
     private String mImageCompressionDescription;
+    private String mDestinationFolder;
 
     /**
      * Constructor
@@ -148,6 +166,7 @@ public class VectorRoomMediasSender {
         if ((null == mSharedDataItems) || (0 == mSharedDataItems.size())) {
             Log.d(LOG_TAG, "sendMedias : done");
             mImageCompressionDescription = null;
+            mDestinationFolder = null;
             mSharedDataItems = null;
 
             mVectorRoomActivity.runOnUiThread(new Runnable() {
@@ -172,12 +191,10 @@ public class VectorRoomMediasSender {
             @Override
             public void run() {
                 final RoomMediaMessage sharedDataItem = mSharedDataItems.get(0);
-                String mimeType = sharedDataItem.getMimeType(mVectorRoomActivity);
+                String mt = sharedDataItem.getMimeType(mVectorRoomActivity);
 
                 // avoid null case
-                if (null == mimeType) {
-                    mimeType = "";
-                }
+                final String mimeType = (mt == null) ? "" : mt;
 
                 if (TextUtils.equals(ClipDescription.MIMETYPE_TEXT_INTENT, mimeType)) {
                     Log.d(LOG_TAG, "sendMedias :  unsupported mime type");
@@ -204,7 +221,7 @@ public class VectorRoomMediasSender {
 
                     final String fFilename = sharedDataItem.getFileName(mVectorRoomActivity);
 
-                    ResourceUtils.Resource resource = ResourceUtils.openResource(mVectorRoomActivity, sharedDataItem.getUri(), sharedDataItem.getMimeType(mVectorRoomActivity));
+                    final ResourceUtils.Resource resource = ResourceUtils.openResource(mVectorRoomActivity, sharedDataItem.getUri(), sharedDataItem.getMimeType(mVectorRoomActivity));
 
                     if (null == resource) {
                         Log.e(LOG_TAG, "sendMedias : " + fFilename + " is not found");
@@ -227,26 +244,46 @@ public class VectorRoomMediasSender {
                         return;
                     }
 
-                    if (mimeType.startsWith("image/") &&
-                            (ResourceUtils.MIME_TYPE_JPEG.equals(mimeType) ||
-                                    ResourceUtils.MIME_TYPE_JPG.equals(mimeType) ||
-                                    ResourceUtils.MIME_TYPE_IMAGE_ALL.equals(mimeType))) {
-                        sendJpegImage(sharedDataItem, resource);
-                    } else {
-                        resource.close();
-                        mVectorRoomActivity.runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                mVectorMessageListFragment.sendMediaMessage(sharedDataItem);
+                    //RIOS: dialog to ask which is the folder in cloud that the file will be sent
+                    selectDestinationFolder(new OnDestinationFolderSelectedListener() {
+                        @Override
+                        public void onDone() {
+                            if (!TextUtils.isEmpty(mDestinationFolder)) {
+                                sharedDataItem.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
                             }
-                        });
+                            if (mimeType.startsWith("image/") &&
+                                    (ResourceUtils.MIME_TYPE_JPEG.equals(mimeType) ||
+                                            ResourceUtils.MIME_TYPE_JPG.equals(mimeType) ||
+                                            ResourceUtils.MIME_TYPE_IMAGE_ALL.equals(mimeType))) {
+                                sendJpegImage(sharedDataItem, resource);
+                            } else {
+                                resource.close();
+                                mVectorRoomActivity.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        mVectorMessageListFragment.sendMediaMessage(sharedDataItem);
+                                    }
+                                });
 
-                        // manage others
-                        if (mSharedDataItems.size() > 0) {
-                            mSharedDataItems.remove(0);
+                                // manage others
+                                if (mSharedDataItems.size() > 0) {
+                                    mSharedDataItems.remove(0);
+                                }
+                                sendMedias();
+                            }
                         }
-                        sendMedias();
-                    }
+
+                        @Override
+                        public void onCancel() {
+                            // manage others
+                            if (mSharedDataItems.size() > 0) {
+                                mSharedDataItems.remove(0);
+                            }
+                            sendMedias();
+                        }
+                    });
+
+
                 }
             }
         });
@@ -724,7 +761,11 @@ public class VectorRoomMediasSender {
                     mVectorRoomActivity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            mVectorMessageListFragment.sendMediaMessage(new RoomMediaMessage(Uri.parse(fImageUrl), roomMediaMessage.getFileName(mVectorRoomActivity)));
+                            RoomMediaMessage rmMessage = new RoomMediaMessage(Uri.parse(fImageUrl), roomMediaMessage.getFileName(mVectorRoomActivity));
+                            if (!TextUtils.isEmpty(mDestinationFolder)) {
+                                rmMessage.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
+                            }
+                            mVectorMessageListFragment.sendMediaMessage(rmMessage);
                             aListener.onDone();
                         }
                     });
@@ -749,7 +790,7 @@ public class VectorRoomMediasSender {
                         public void onClick(DialogInterface dialog, int which) {
                             final int fPos = which;
 
-                            mImageSizesListDialog.dismiss();
+                            mFolderListDialog.dismiss();
 
                             mVectorRoomActivity.runOnUiThread(new Runnable() {
                                 @Override
@@ -774,7 +815,11 @@ public class VectorRoomMediasSender {
                                             mVectorRoomActivity.runOnUiThread(new Runnable() {
                                                 @Override
                                                 public void run() {
-                                                    mVectorMessageListFragment.sendMediaMessage(new RoomMediaMessage(Uri.parse(fImageUrl), roomMediaMessage.getFileName(mVectorRoomActivity)));
+                                                    RoomMediaMessage rmMessage = new RoomMediaMessage(Uri.parse(fImageUrl), roomMediaMessage.getFileName(mVectorRoomActivity));
+                                                    if (!TextUtils.isEmpty(mDestinationFolder)) {
+                                                        rmMessage.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
+                                                    }
+                                                    mVectorMessageListFragment.sendMediaMessage(rmMessage);
                                                     aListener.onDone();
                                                 }
                                             });
@@ -788,11 +833,11 @@ public class VectorRoomMediasSender {
                         }
                     });
 
-                    mImageSizesListDialog = alert.show();
-                    mImageSizesListDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    mFolderListDialog = alert.show();
+                    mFolderListDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
                         @Override
                         public void onCancel(DialogInterface dialog) {
-                            mImageSizesListDialog = null;
+                            mFolderListDialog = null;
                             if (null != aListener) {
                                 aListener.onCancel();
                             }
@@ -817,4 +862,70 @@ public class VectorRoomMediasSender {
             });
         }
     }
+
+    //================================================================================
+    // Folder dialog
+    //================================================================================
+    private void selectDestinationFolder(final OnDestinationFolderSelectedListener aListener) {
+        try {
+            if (mDestinationFolder != null) {
+                aListener.onDone();
+                return;
+            }
+            mVectorMessageListFragment.getTargetFolders(new CloudFoldersResponseListener() {
+                @Override
+                public void onSuccess(final List<CloudFolder> cloudFolders) {
+                    if (cloudFolders.size() == 0) {
+                        mDestinationFolder = "";
+                        aListener.onDone();
+                    } else {
+                        ArrayList<String> folderNamesList = new ArrayList<String>();
+                        folderNamesList.add("/");
+                        for (int i=0; i<cloudFolders.size(); i++) {
+                            folderNamesList.add(cloudFolders.get(i).name);
+                        }
+
+                        String stringsArray[] = folderNamesList.toArray(new String[0]);
+
+                        final AlertDialog.Builder alert = new AlertDialog.Builder(mVectorRoomActivity);
+                        alert.setTitle(mVectorRoomActivity.getString(im.vector.R.string.cloud_folder_options));
+                        alert.setSingleChoiceItems(stringsArray, -1, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                String result = "";
+                                if (which > 0) {
+                                    result = Integer.toString(cloudFolders.get(which-1).id) + ":" + cloudFolders.get(which-1).name;
+                                }
+
+                                mDestinationFolder = result;
+
+                                mFolderListDialog.dismiss();
+                                aListener.onDone();
+                            }
+                        });
+
+                        mFolderListDialog = alert.show();
+                        mFolderListDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+                            @Override
+                            public void onCancel(DialogInterface dialog) {
+                                mDestinationFolder = null;
+                                mFolderListDialog.dismiss();
+                                if (null != aListener) {
+                                    aListener.onCancel();
+                                }
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onFailure() {
+                    aListener.onCancel();
+                }
+            });
+        } catch (Exception e) {
+            aListener.onCancel();
+        }
+    }
+
 }

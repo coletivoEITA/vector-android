@@ -921,4 +921,7 @@
     <string name="notice_avatar">Notice avatar</string>
     <string name="avatar">Avatar</string>
 
+    <!-- cloud folder destination selection -->
+    <string name="cloud_folder_options">Destination folder</string>
+
 </resources>

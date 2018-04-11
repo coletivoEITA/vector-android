@@ -78,6 +78,9 @@ import im.vector.activity.VectorMediasViewerActivity;
 import im.vector.activity.VectorMemberDetailsActivity;
 import im.vector.activity.VectorRoomActivity;
 import im.vector.adapters.VectorMessagesAdapter;
+import im.vector.cloud.CloudFolder;
+import im.vector.cloud.CloudFoldersResponseListener;
+import im.vector.cloud.CloudRestClient;
 import im.vector.db.VectorContentProvider;
 import im.vector.listeners.IMessagesAdapterActionsListener;
 import im.vector.receiver.VectorUniversalLinkReceiver;
@@ -87,6 +90,9 @@ import im.vector.util.ThemeUtils;
 import im.vector.util.VectorImageGetter;
 import im.vector.util.VectorUtils;
 import im.vector.widgets.WidgetsManager;
+import retrofit.Callback;
+import retrofit.RetrofitError;
+import retrofit.client.Response;
 
 public class VectorMessageListFragment extends MatrixMessageListFragment implements IMessagesAdapterActionsListener {
     private static final String LOG_TAG = VectorMessageListFragment.class.getSimpleName();
@@ -1266,5 +1272,31 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         mHighlightStatusByEventId.put(eventId, res);
 
         return res;
+    }
+
+    /********************************************************
+     * CLOUD METHODS                                        *
+     ********************************************************/
+
+
+    CloudRestClient mRestClient;
+
+    public void getTargetFolders(final CloudFoldersResponseListener aListener) {
+        if (null == mRestClient) {
+            String riosCloudServerUrl = getActivity().getResources().getString(R.string.rios_cloud_server_url);
+            mRestClient = new CloudRestClient(riosCloudServerUrl);
+        }
+
+        mRestClient.getRoomSharedFolders(mRoom.getRoomId(), mSession.getMyUserId(), new Callback<List<CloudFolder>>() {
+            @Override
+            public void success(List<CloudFolder> cloudFolders, Response response) {
+                aListener.onSuccess(cloudFolders);
+            }
+
+            @Override
+            public void failure(RetrofitError error) {
+                aListener.onFailure();
+            }
+        });
     }
 }
