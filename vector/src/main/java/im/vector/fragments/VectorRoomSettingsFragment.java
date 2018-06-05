@@ -62,6 +62,7 @@ import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
 import org.matrix.androidsdk.rest.model.Event;
 import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.rest.model.PowerLevels;
+import org.matrix.androidsdk.rest.model.RiosFolder;
 import org.matrix.androidsdk.rest.model.RoomMember;
 import org.matrix.androidsdk.util.BingRulesManager;
 import org.matrix.androidsdk.util.Log;
@@ -82,6 +83,7 @@ import im.vector.activity.CommonActivityUtils;
 import im.vector.activity.VectorMediasPickerActivity;
 import im.vector.activity.VectorMemberDetailsActivity;
 import im.vector.preference.AddressPreference;
+import im.vector.preference.DefaultFolderPreference;
 import im.vector.preference.RoomAvatarPreference;
 import im.vector.preference.VectorCustomActionEditTextPreference;
 import im.vector.preference.VectorListPreference;
@@ -120,6 +122,9 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
     private static final String PREF_KEY_ROOM_INTERNAL_ID = "roomInternalId";
     private static final String PREF_KEY_ADDRESSES = "addresses";
     private static final String PREF_KEY_ADVANCED = "advanced";
+
+    //RIOS
+    private static final String PREF_KEY_ROOM_RIOS_DEFAULT_FOLDER = "roomDefaultFolderPreference";
 
     private static final String PREF_KEY_BANNED = "banned";
     private static final String PREF_KEY_BANNED_DIVIDER = "banned_divider";
@@ -168,6 +173,7 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
     private View mParentLoadingView;
     private View mParentFragmentContainerView;
     private ListPreference mRoomNotificationsPreference;
+    private DefaultFolderPreference mRoomDefaultFolderPreference;
 
     // disable some updates if there is
     private final IMXNetworkEventListener mNetworkListener = new IMXNetworkEventListener() {
@@ -344,6 +350,9 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
         mBannedMembersSettingsCategoryDivider = (PreferenceCategory) getPreferenceManager().findPreference(PREF_KEY_BANNED_DIVIDER);
         mFlairSettingsCategory = (PreferenceCategory) getPreferenceManager().findPreference(PREF_KEY_FLAIR);
         mRoomNotificationsPreference = (ListPreference) getPreferenceManager().findPreference(PREF_KEY_ROOM_NOTIFICATIONS_LIST);
+
+        //RIOS
+        mRoomDefaultFolderPreference = (DefaultFolderPreference) getPreferenceManager().findPreference(PREF_KEY_ROOM_RIOS_DEFAULT_FOLDER);
 
         mRoomAccessRulesListPreference.setOnPreferenceWarningIconClickListener(new VectorListPreference.OnPreferenceWarningIconClickListener() {
             @Override
@@ -727,6 +736,10 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
         if (null != mRoomNotificationsPreference) {
             mRoomNotificationsPreference.setEnabled(isConnected);
         }
+
+        if (null != mRoomDefaultFolderPreference) {
+            mRoomDefaultFolderPreference.setEnabled(isAdmin);
+        }
     }
 
 
@@ -835,6 +848,28 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
             mRoomNotificationsPreference.setSummary(value);
         }
 
+        if (null != mRoomDefaultFolderPreference) {
+            mRoomDefaultFolderPreference.setFolderList(mRoom.getDestinationFolders());
+            mRoomDefaultFolderPreference.setSelectedFolder(mRoom.getDefaultFolder());
+
+            /*
+            BingRulesManager.RoomNotificationState state = mSession.getDataHandler().getBingRulesManager().getRoomNotificationState(mRoom.getRoomId());
+
+            if (state == BingRulesManager.RoomNotificationState.ALL_MESSAGES_NOISY) {
+                value = getString(R.string.room_settings_all_messages_noisy);
+            } else if (state == BingRulesManager.RoomNotificationState.ALL_MESSAGES) {
+                value = getString(R.string.room_settings_all_messages);
+            } else if (state == BingRulesManager.RoomNotificationState.MENTIONS_ONLY) {
+                value = getString(R.string.room_settings_mention_only);
+            } else {
+                value = getString(R.string.room_settings_mute);
+            }
+
+            mRoomNotificationsPreference.setValue(value);
+            mRoomNotificationsPreference.setSummary(value);
+            */
+        }
+
         // update the room tag preference
         if (null != mRoomTagListPreference) {
 
@@ -934,6 +969,8 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
             onRoomAccessPreferenceChanged();
         } else if (aKey.equals(PREF_KEY_ROOM_HISTORY_READABILITY_LIST)) {
             onRoomHistoryReadabilityPreferenceChanged(); // TBT
+        } else if (aKey.equals(PREF_KEY_ROOM_RIOS_DEFAULT_FOLDER)) {
+            onRoomDefaultFolderPreferenceChanged();
         } else {
             Log.w(LOG_TAG, "## onSharedPreferenceChanged(): unknown aKey = " + aKey);
         }
@@ -1165,6 +1202,51 @@ public class VectorRoomSettingsFragment extends PreferenceFragment implements Sh
             mRoom.updateTopic(newTopic, mUpdateCallback);
         }
 
+    }
+
+    /**
+     * Action when updating the default folder.
+     */
+    private void onRoomDefaultFolderPreferenceChanged() {
+        // sanity check
+        if (null == mRoom || null == mRoomDefaultFolderPreference) {
+            return;
+        }
+
+        RiosFolder value = mRoomDefaultFolderPreference.getSelectedFolder();
+
+    /*
+        BingRulesManager.RoomNotificationState updatedState;
+
+        if (TextUtils.equals(value, getString(R.string.room_settings_all_messages_noisy))) {
+            updatedState = BingRulesManager.RoomNotificationState.ALL_MESSAGES_NOISY;
+        } else if (TextUtils.equals(value, getString(R.string.room_settings_all_messages))) {
+            updatedState = BingRulesManager.RoomNotificationState.ALL_MESSAGES;
+        } else if (TextUtils.equals(value, getString(R.string.room_settings_mention_only))) {
+            updatedState = BingRulesManager.RoomNotificationState.MENTIONS_ONLY;
+        } else {
+            updatedState = BingRulesManager.RoomNotificationState.MUTE;
+        }
+
+        // update only, if values are different
+        if (mBingRulesManager.getRoomNotificationState(mRoom.getRoomId()) != updatedState) {
+            displayLoadingView();
+            mBingRulesManager.updateRoomNotificationState(mRoom.getRoomId(), updatedState,
+                    new BingRulesManager.onBingRuleUpdateListener() {
+                        @Override
+                        public void onBingRuleUpdateSuccess() {
+                            Log.d(LOG_TAG, "##onRoomNotificationsPreferenceChanged(): update succeed");
+                            hideLoadingView(UPDATE_UI);
+                        }
+
+                        @Override
+                        public void onBingRuleUpdateFailure(String errorMessage) {
+                            Log.w(LOG_TAG, "##onRoomNotificationsPreferenceChanged(): BingRuleUpdateFailure");
+                            hideLoadingView(DO_NOT_UPDATE_UI);
+                        }
+                    });
+        }
+        */
     }
 
     /**

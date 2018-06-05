@@ -920,7 +920,10 @@ public class VectorRoomMediasSender {
 
                 @Override
                 public void onFailure() {
-                    aListener.onCancel();
+                    //If cannot get the available folders, continue to send file in the normal way
+                    mDestinationFolder = null;
+                    aListener.onDone();
+                    //aListener.onCancel();
                 }
             });
         } catch (Exception e) {

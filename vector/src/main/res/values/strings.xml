@@ -683,6 +683,9 @@
     <string name="room_settings_room_read_history_rules_pref_dialog_title">Who can read history?</string>
     <string name="room_settings_room_access_rules_pref_dialog_title">Who can access this room?</string>
 
+    <!-- RIOS -->
+    <string name="room_settings_room_defauult_folder_title">Default folder to upload files</string>
+
     <!-- Room settings, access and visibility : WHO CAN READ HISTORY? (read rule) -->
     <string name="room_settings_read_history_entry_anyone">Anyone</string>
     <string name="room_settings_read_history_entry_members_only_option_time_shared">Members only (since the point in time of selecting this option)</string>
