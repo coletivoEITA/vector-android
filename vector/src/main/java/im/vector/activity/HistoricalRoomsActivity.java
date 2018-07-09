@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +20,6 @@ package im.vector.activity;
 import android.app.SearchManager;
 import android.content.Context;
 import android.os.AsyncTask;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.widget.DividerItemDecoration;
@@ -36,6 +36,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.jetbrains.annotations.NotNull;
 import org.matrix.androidsdk.MXDataHandler;
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.data.Room;
@@ -49,7 +50,6 @@ import java.util.Iterator;
 import java.util.List;
 
 import butterknife.BindView;
-import butterknife.ButterKnife;
 import im.vector.Matrix;
 import im.vector.R;
 import im.vector.adapters.AbsAdapter;
@@ -58,11 +58,16 @@ import im.vector.util.RoomUtils;
 import im.vector.util.ThemeUtils;
 import im.vector.view.EmptyViewItemDecoration;
 import im.vector.view.SimpleDividerItemDecoration;
+import kotlin.Pair;
 
 /**
  * Displays the historical rooms list
  */
-public class HistoricalRoomsActivity extends RiotAppCompatActivity implements SearchView.OnQueryTextListener, HomeRoomAdapter.OnSelectRoomListener, AbsAdapter.MoreRoomActionListener, RoomUtils.HistoricalRoomActionListener {
+public class HistoricalRoomsActivity extends RiotAppCompatActivity implements
+        SearchView.OnQueryTextListener,
+        HomeRoomAdapter.OnSelectRoomListener,
+        AbsAdapter.MoreRoomActionListener,
+        RoomUtils.HistoricalRoomActionListener {
     private static final String LOG_TAG = HistoricalRoomsActivity.class.getSimpleName();
 
     @BindView(R.id.search_view)
@@ -78,7 +83,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
     Toolbar mToolbar;
 
     @BindView(R.id.historical_waiting_view)
-    View mWaitingView;
+    View waitingView;
 
     // historical adapter
     private HomeRoomAdapter mHistoricalAdapter;
@@ -95,15 +100,24 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
      * *********************************************************************************************
      */
 
+    @NotNull
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public Pair getOtherThemes() {
+        return new Pair(R.style.HomeActivityTheme_Dark, R.style.HomeActivityTheme_Black);
+    }
 
-        // required to have the right translated title
-        setTitle(R.string.title_activity_historical);
-        setContentView(R.layout.activity_historical);
-        ButterKnife.bind(this);
+    @Override
+    public int getLayoutRes() {
+        return R.layout.activity_historical;
+    }
 
+    @Override
+    public int getTitleRes() {
+        return R.string.title_activity_historical;
+    }
+
+    @Override
+    public void initUiAndData() {
         if (CommonActivityUtils.shouldRestartApp(this)) {
             Log.e(LOG_TAG, "Restart the application.");
             CommonActivityUtils.restartApp(this);
@@ -194,7 +208,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
         mSearchView.setQueryHint(getString(R.string.historical_placeholder));
 
         SearchView.SearchAutoComplete searchAutoComplete = mSearchView.findViewById(android.support.v7.appcompat.R.id.search_src_text);
-        searchAutoComplete.setHintTextColor(ThemeUtils.getColor(this, R.attr.default_text_hint_color));
+        searchAutoComplete.setHintTextColor(ThemeUtils.INSTANCE.getColor(this, R.attr.default_text_hint_color));
     }
 
     /*
@@ -208,7 +222,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
 
         if (!dataHandler.areLeftRoomsSynced()) {
             mHistoricalAdapter.setRooms(new ArrayList<Room>());
-            mWaitingView.setVisibility(View.VISIBLE);
+            showWaitingView();
             dataHandler.retrieveLeftRooms(new ApiCallback<Void>() {
                 @Override
                 public void onSuccess(Void info) {
@@ -244,7 +258,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
      * Init history rooms data
      */
     private void initHistoricalRoomsData() {
-        mWaitingView.setVisibility(View.GONE);
+        hideWaitingView();
         final List<Room> historicalRooms = new ArrayList<>(mSession.getDataHandler().getLeftRooms());
         for (Iterator<Room> iterator = historicalRooms.iterator(); iterator.hasNext(); ) {
             final Room room = iterator.next();
@@ -340,11 +354,11 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
      * @param errorMessage the localized error message
      */
     private void onRequestDone(final String errorMessage) {
-        if (!this.isFinishing()) {
+        if (!isFinishing()) {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mWaitingView.setVisibility(View.GONE);
+                    hideWaitingView();
                     if (!TextUtils.isEmpty(errorMessage)) {
                         Toast.makeText(HistoricalRoomsActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
                     }
@@ -355,7 +369,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
 
     @Override
     public void onSelectRoom(Room room, int position) {
-        mWaitingView.setVisibility(View.VISIBLE);
+        showWaitingView();
         CommonActivityUtils.previewRoom(this, mSession, room.getRoomId(), "", new ApiCallback<Void>() {
             @Override
             public void onSuccess(Void info) {
@@ -391,7 +405,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements Se
 
     @Override
     public void onForgotRoom(Room room) {
-        mWaitingView.setVisibility(View.VISIBLE);
+        showWaitingView();
 
         room.forget(new ApiCallback<Void>() {
             @Override

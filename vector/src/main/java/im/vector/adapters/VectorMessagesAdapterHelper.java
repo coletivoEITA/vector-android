@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,7 @@ package im.vector.adapters;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.support.annotation.Nullable;
 import android.text.Html;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
@@ -47,17 +49,19 @@ import org.matrix.androidsdk.data.store.IMXStore;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.model.Event;
 import org.matrix.androidsdk.rest.model.MatrixError;
+import org.matrix.androidsdk.rest.model.ReceiptData;
+import org.matrix.androidsdk.rest.model.RoomMember;
 import org.matrix.androidsdk.rest.model.URLPreview;
 import org.matrix.androidsdk.rest.model.group.Group;
 import org.matrix.androidsdk.rest.model.group.GroupProfile;
 import org.matrix.androidsdk.rest.model.message.Message;
-import org.matrix.androidsdk.rest.model.ReceiptData;
-import org.matrix.androidsdk.rest.model.RoomMember;
+import org.matrix.androidsdk.rest.model.message.StickerMessage;
 import org.matrix.androidsdk.util.EventDisplay;
 import org.matrix.androidsdk.util.JsonUtils;
 import org.matrix.androidsdk.util.Log;
 import org.matrix.androidsdk.view.HtmlTagHandler;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -73,7 +77,6 @@ import im.vector.VectorApp;
 import im.vector.listeners.IMessagesAdapterActionsListener;
 import im.vector.util.MatrixLinkMovementMethod;
 import im.vector.util.MatrixURLSpan;
-import im.vector.util.PreferencesManager;
 import im.vector.util.RiotEventDisplay;
 import im.vector.util.ThemeUtils;
 import im.vector.util.VectorImageGetter;
@@ -241,7 +244,7 @@ class VectorMessagesAdapterHelper {
 
             groupFlairView.setVisibility(View.VISIBLE);
 
-            ArrayList<ImageView> imageViews = new ArrayList<>();
+            List<ImageView> imageViews = new ArrayList<>();
 
             imageViews.add((ImageView) (groupFlairView.findViewById(R.id.message_avatar_group_1).findViewById(R.id.avatar_img)));
             imageViews.add((ImageView) (groupFlairView.findViewById(R.id.message_avatar_group_2).findViewById(R.id.avatar_img)));
@@ -346,10 +349,20 @@ class VectorMessagesAdapterHelper {
         final String tag = event.getSender() + "__" + event.eventId;
 
         if (null == mRoom) {
-            mRoom = mSession.getDataHandler().getRoom(event.roomId);
+            // The flair handling required the room state. So we retrieve the current room (if any).
+            // Do not create it if it is not available. For example the room is not available during a room preview.
+            // Indeed the room is then stored in memory, and we could not reach it from here for the moment.
+            // TODO render the flair in the room preview history.
+            mRoom = mSession.getDataHandler().getRoom(event.roomId, false);
+
+            if (null == mRoom) {
+                Log.d(LOG_TAG, "## refreshGroupFlairView () : the room is not available");
+                groupFlairView.setVisibility(View.GONE);
+                return;
+            }
         }
 
-        // no related groups to this room
+        // Check whether there are some related groups to this room
         if (mRoom.getLiveState().getRelatedGroups().isEmpty()) {
             Log.d(LOG_TAG, "## refreshGroupFlairView () : no related group");
             groupFlairView.setVisibility(View.GONE);
@@ -589,6 +602,38 @@ class VectorMessagesAdapterHelper {
     }
 
     /**
+     * Hide the sticker description view
+     *
+     * @param convertView base view
+     */
+    public void hideStickerDescription(View convertView) {
+        View stickerDescription = convertView.findViewById(R.id.message_adapter_sticker_layout);
+
+        if (null != stickerDescription) {
+            stickerDescription.setVisibility(View.GONE);
+        }
+    }
+
+    /**
+     * Show the sticker description view
+     *
+     * @param view           base view
+     * @param stickerMessage the sticker message
+     */
+    public void showStickerDescription(View view, StickerMessage stickerMessage) {
+        View stickerDescriptionLayout = view.findViewById(R.id.message_adapter_sticker_layout);
+        ImageView stickerTriangle = view.findViewById(R.id.message_adapter_sticker_triangle);
+        TextView stickerDescription = view.findViewById(R.id.message_adapter_sticker_description);
+
+        if (null != stickerDescriptionLayout && null != stickerTriangle && null != stickerDescription) {
+            stickerDescriptionLayout.setVisibility(View.VISIBLE);
+            stickerTriangle.setVisibility(View.VISIBLE);
+            stickerDescription.setVisibility(View.VISIBLE);
+            stickerDescription.setText(stickerMessage.body);
+        }
+    }
+
+    /**
      * Hide the read receipts view
      *
      * @param convertView base view
@@ -650,7 +695,7 @@ class VectorMessagesAdapterHelper {
 
         avatarsListView.setVisibility(View.VISIBLE);
 
-        ArrayList<View> imageViews = new ArrayList<>();
+        List<View> imageViews = new ArrayList<>();
 
         imageViews.add(avatarsListView.findViewById(R.id.message_avatar_receipt_1).findViewById(R.id.avatar_img));
         imageViews.add(avatarsListView.findViewById(R.id.message_avatar_receipt_2).findViewById(R.id.avatar_img));
@@ -714,7 +759,8 @@ class VectorMessagesAdapterHelper {
 
         if (null != downloadProgressLayout) {
             ViewGroup.MarginLayoutParams downloadProgressLayoutParams = (ViewGroup.MarginLayoutParams) downloadProgressLayout.getLayoutParams();
-            downloadProgressLayoutParams.setMargins(marginLeft, downloadProgressLayoutParams.topMargin, downloadProgressLayoutParams.rightMargin, downloadProgressLayoutParams.bottomMargin);
+            downloadProgressLayoutParams.setMargins(marginLeft, downloadProgressLayoutParams.topMargin,
+                    downloadProgressLayoutParams.rightMargin, downloadProgressLayoutParams.bottomMargin);
             downloadProgressLayout.setLayoutParams(downloadProgressLayoutParams);
         }
 
@@ -722,7 +768,8 @@ class VectorMessagesAdapterHelper {
 
         if (null != uploadProgressLayout) {
             ViewGroup.MarginLayoutParams uploadProgressLayoutParams = (ViewGroup.MarginLayoutParams) uploadProgressLayout.getLayoutParams();
-            uploadProgressLayoutParams.setMargins(marginLeft, uploadProgressLayoutParams.topMargin, uploadProgressLayoutParams.rightMargin, uploadProgressLayoutParams.bottomMargin);
+            uploadProgressLayoutParams.setMargins(marginLeft, uploadProgressLayoutParams.topMargin,
+                    uploadProgressLayoutParams.rightMargin, uploadProgressLayoutParams.bottomMargin);
             uploadProgressLayout.setLayoutParams(uploadProgressLayoutParams);
         }
     }
@@ -749,23 +796,27 @@ class VectorMessagesAdapterHelper {
                 Drawable drawable = mPillsDrawableCache.get(key);
 
                 if (null == drawable) {
-                    final PillView aView = new PillView(mContext);
-                    aView.initData(strBuilder.subSequence(start, end), span.getURL(), mSession, new PillView.OnUpdateListener() {
+                    PillView pillView = new PillView(mContext);
+                    pillView.setBackgroundResource(android.R.color.transparent);
+                    // Define a weak reference of the view because of the cross reference in the OnUpdateListener.
+                    final WeakReference<PillView> weakView = new WeakReference<>(pillView);
+
+                    pillView.initData(strBuilder.subSequence(start, end), span.getURL(), mSession, new PillView.OnUpdateListener() {
                         @Override
                         public void onAvatarUpdate() {
-                            // force to compose
-                            aView.setBackgroundResource(android.R.color.transparent);
-
-                            // get a drawable from the view
-                            Drawable updatedDrawable = aView.getDrawable();
-                            mPillsDrawableCache.put(key, updatedDrawable);
-                            // should update only the current cell
-                            // but it might have been recycled
-                            mAdapter.notifyDataSetChanged();
+                            if ((null != weakView) && (null != weakView.get())) {
+                                PillView pillView = weakView.get();
+                                // get a drawable from the view (force to compose)
+                                Drawable updatedDrawable = pillView.getDrawable(true);
+                                mPillsDrawableCache.put(key, updatedDrawable);
+                                // should update only the current cell
+                                // but it might have been recycled
+                                mAdapter.notifyDataSetChanged();
+                            }
                         }
                     });
-                    aView.setHighlighted(isHighlighted);
-                    drawable = aView.getDrawable();
+                    pillView.setHighlighted(isHighlighted);
+                    drawable = pillView.getDrawable(false);
                 }
 
                 if (null != drawable) {
@@ -835,9 +886,16 @@ class VectorMessagesAdapterHelper {
             return;
         }
 
-        textView.setBackgroundColor(ThemeUtils.getColor(mContext, R.attr.markdown_block_background_color));
+        textView.setBackgroundColor(ThemeUtils.INSTANCE.getColor(mContext, R.attr.markdown_block_background_color));
+    }
 
-        if (null != mLinkMovementMethod) {
+    /**
+     * Apply link movement method to the TextView if not null
+     *
+     * @param textView
+     */
+    void applyLinkMovementMethod(@Nullable final TextView textView) {
+        if (textView != null && mLinkMovementMethod != null) {
             textView.setMovementMethod(mLinkMovementMethod);
         }
     }
@@ -845,19 +903,13 @@ class VectorMessagesAdapterHelper {
     /**
      * Highlight the pattern in the text.
      *
-     * @param textView           the textview
      * @param text               the text to display
-     * @param htmlFormattedText  the html formatted text
      * @param pattern            the  pattern
      * @param highLightTextStyle the highlight text style
      * @param isHighlighted      true when the message is highlighted
+     * @return CharSequence of the text with highlighted pattern
      */
-    void highlightPattern(TextView textView, Spannable text, String htmlFormattedText, String pattern, CharacterStyle highLightTextStyle, boolean isHighlighted) {
-        // sanity check
-        if (null == textView) {
-            return;
-        }
-
+    CharSequence highlightPattern(Spannable text, String pattern, CharacterStyle highLightTextStyle, boolean isHighlighted) {
         if (!TextUtils.isEmpty(pattern) && !TextUtils.isEmpty(text) && (text.length() >= pattern.length())) {
 
             String lowerText = text.toString().toLowerCase(VectorApp.getApplicationLocale());
@@ -874,9 +926,25 @@ class VectorMessagesAdapterHelper {
             }
         }
 
+        SpannableStringBuilder strBuilder = new SpannableStringBuilder(text);
+        URLSpan[] urls = strBuilder.getSpans(0, text.length(), URLSpan.class);
+
+        if ((null != urls) && (urls.length > 0)) {
+            for (URLSpan span : urls) {
+                makeLinkClickable(strBuilder, span, isHighlighted);
+            }
+        }
+
+        MatrixURLSpan.refreshMatrixSpans(strBuilder, mEventsListener);
+
+        return strBuilder;
+    }
+
+
+    CharSequence convertToHtml(String htmlFormattedText) {
         final HtmlTagHandler htmlTagHandler = new HtmlTagHandler();
         htmlTagHandler.mContext = mContext;
-        htmlTagHandler.setCodeBlockBackgroundColor(ThemeUtils.getColor(mContext, R.attr.markdown_block_background_color));
+        htmlTagHandler.setCodeBlockBackgroundColor(ThemeUtils.INSTANCE.getColor(mContext, R.attr.markdown_block_background_color));
 
         CharSequence sequence;
 
@@ -899,7 +967,8 @@ class VectorMessagesAdapterHelper {
                     ;
 
                 // search latest non \n character
-                for (; (markEnd >= 0) && ('\n' == sequence.charAt(markEnd)); markEnd--) ;
+                for (; (markEnd >= 0) && ('\n' == sequence.charAt(markEnd)); markEnd--)
+                    ;
 
                 // empty string ?
                 if (markEnd < markStart) {
@@ -909,24 +978,10 @@ class VectorMessagesAdapterHelper {
                 }
             }
         } else {
-            sequence = text;
+            sequence = "";
         }
 
-        SpannableStringBuilder strBuilder = new SpannableStringBuilder(sequence);
-        URLSpan[] urls = strBuilder.getSpans(0, text.length(), URLSpan.class);
-
-        if ((null != urls) && (urls.length > 0)) {
-            for (URLSpan span : urls) {
-                makeLinkClickable(strBuilder, span, isHighlighted);
-            }
-        }
-
-        MatrixURLSpan.refreshMatrixSpans(strBuilder, mEventsListener);
-        textView.setText(strBuilder);
-
-        if (null != mLinkMovementMethod) {
-            textView.setMovementMethod(mLinkMovementMethod);
-        }
+        return sequence;
     }
 
     /**
@@ -952,8 +1007,14 @@ class VectorMessagesAdapterHelper {
 
         if (Event.EVENT_TYPE_MESSAGE.equals(eventType)) {
             // A message is displayable as long as it has a body
+            // Redacted messages should not be displayed
             Message message = JsonUtils.toMessage(event.getContent());
-            return !TextUtils.isEmpty(message.body) || TextUtils.equals(message.msgtype, Message.MSGTYPE_EMOTE);
+            return !event.isRedacted() && (!TextUtils.isEmpty(message.body) || TextUtils.equals(message.msgtype, Message.MSGTYPE_EMOTE));
+        } else if (Event.EVENT_TYPE_STICKER.equals(eventType)) {
+            // A sticker is displayable as long as it has a body
+            // Redacted stickers should not be displayed
+            StickerMessage stickerMessage = JsonUtils.toStickerMessage(event.getContent());
+            return !TextUtils.isEmpty(stickerMessage.body) && !event.isRedacted();
         } else if (Event.EVENT_TYPE_STATE_ROOM_TOPIC.equals(eventType)
                 || Event.EVENT_TYPE_STATE_ROOM_NAME.equals(eventType)) {
             EventDisplay display = new RiotEventDisplay(context, event, roomState);
@@ -961,8 +1022,7 @@ class VectorMessagesAdapterHelper {
         } else if (event.isCallEvent()) {
             return Event.EVENT_TYPE_CALL_INVITE.equals(eventType) ||
                     Event.EVENT_TYPE_CALL_ANSWER.equals(eventType) ||
-                    Event.EVENT_TYPE_CALL_HANGUP.equals(eventType)
-                    ;
+                    Event.EVENT_TYPE_CALL_HANGUP.equals(eventType);
         } else if (Event.EVENT_TYPE_STATE_ROOM_MEMBER.equals(eventType) || Event.EVENT_TYPE_STATE_ROOM_THIRD_PARTY_INVITE.equals(eventType)) {
             // if we can display text for it, it's valid.
             EventDisplay display = new RiotEventDisplay(context, event, roomState);
@@ -974,7 +1034,8 @@ class VectorMessagesAdapterHelper {
             EventDisplay display = new RiotEventDisplay(context, event, roomState);
             return event.hasContentFields() && (display.getTextualDisplay() != null);
         } else if (TextUtils.equals(WidgetsManager.WIDGET_EVENT_TYPE, event.getType())) {
-            return PreferencesManager.useMatrixApps(context);
+            // Matrix apps are enabled
+            return true;
         }
         return false;
     }
@@ -983,7 +1044,7 @@ class VectorMessagesAdapterHelper {
     // HTML management
     //================================================================================
 
-    private final HashMap<String, String> mHtmlMap = new HashMap<>();
+    private final Map<String, String> mHtmlMap = new HashMap<>();
 
     /**
      * Retrieves the sanitised html.
@@ -994,6 +1055,7 @@ class VectorMessagesAdapterHelper {
      * @param html the html to sanitize
      * @return the sanitised HTML
      */
+    @Nullable
     String getSanitisedHtml(final String html) {
         // sanity checks
         if (TextUtils.isEmpty(html)) {
@@ -1030,7 +1092,7 @@ class VectorMessagesAdapterHelper {
         String html = htmlString;
         Matcher matcher = mHtmlPatter.matcher(htmlString);
 
-        HashSet<String> tagsToRemove = new HashSet<>();
+        Set<String> tagsToRemove = new HashSet<>();
 
         while (matcher.find()) {
 
@@ -1066,14 +1128,13 @@ class VectorMessagesAdapterHelper {
     }
 
     /*
-  * *********************************************************************************************
-  *  Url preview managements
-  * *********************************************************************************************
-  */
+     * *********************************************************************************************
+     *  Url preview managements
+     * *********************************************************************************************
+     */
     private final Map<String, List<String>> mExtractedUrls = new HashMap<>();
-    private final Map<String, URLPreview> mUrlsPreview = new HashMap<>();
+    private final Map<String, URLPreview> mUrlsPreviews = new HashMap<>();
     private final Set<String> mPendingUrls = new HashSet<>();
-    private final Set<String> mDismissedPreviews = new HashSet<>();
 
     /**
      * Retrieves the webUrl extracted from a text
@@ -1148,19 +1209,19 @@ class VectorMessagesAdapterHelper {
             final String downloadKey = url.hashCode() + "---";
             String displayKey = url + "<----->" + id;
 
-            if (UrlPreviewView.didUrlPreviewDismiss(displayKey)) {
+            if (UrlPreviewView.Companion.didUrlPreviewDismiss(displayKey)) {
                 Log.d(LOG_TAG, "## manageURLPreviews() : " + displayKey + " has been dismissed");
             } else if (mPendingUrls.contains(url)) {
                 // please wait
-            } else if (!mUrlsPreview.containsKey(downloadKey)) {
+            } else if (!mUrlsPreviews.containsKey(downloadKey)) {
                 mPendingUrls.add(url);
                 mSession.getEventsApiClient().getURLPreview(url, System.currentTimeMillis(), new ApiCallback<URLPreview>() {
                     @Override
                     public void onSuccess(URLPreview urlPreview) {
                         mPendingUrls.remove(url);
 
-                        if (!mUrlsPreview.containsKey(downloadKey)) {
-                            mUrlsPreview.put(downloadKey, urlPreview);
+                        if (!mUrlsPreviews.containsKey(downloadKey)) {
+                            mUrlsPreviews.put(downloadKey, urlPreview);
                             mAdapter.notifyDataSetChanged();
                         }
                     }
@@ -1182,7 +1243,7 @@ class VectorMessagesAdapterHelper {
                 });
             } else {
                 UrlPreviewView previewView = new UrlPreviewView(mContext);
-                previewView.setUrlPreview(mContext, mSession, mUrlsPreview.get(downloadKey), displayKey);
+                previewView.setUrlPreview(mContext, mSession, mUrlsPreviews.get(downloadKey), displayKey);
                 urlsPreviewLayout.addView(previewView);
             }
         }

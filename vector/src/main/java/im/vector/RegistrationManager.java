@@ -48,7 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import im.vector.activity.CommonActivityUtils;
+import im.vector.util.UrlUtilKt;
 
 public class RegistrationManager {
     private static final String LOG_TAG = RegistrationManager.class.getSimpleName();
@@ -102,10 +102,10 @@ public class RegistrationManager {
     private boolean mShowThreePidWarning;
 
     /*
-    * *********************************************************************************************
-    * Singleton
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Singleton
+     * *********************************************************************************************
+     */
 
     public static RegistrationManager getInstance() {
         if (sInstance == null) {
@@ -118,10 +118,10 @@ public class RegistrationManager {
     }
 
     /*
-    * *********************************************************************************************
-    * Public methods
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Public methods
+     * *********************************************************************************************
+     */
 
     /**
      * Reset singleton values to allow a new registration
@@ -199,23 +199,21 @@ public class RegistrationManager {
      */
     public void checkUsernameAvailability(final Context context, final UsernameValidityListener listener) {
         if (getLoginRestClient() != null) {
-            final RegistrationParams params = new RegistrationParams();
+            // Trigger a fake registration (without password) to know whether the user name is available or not.
+            RegistrationParams params = new RegistrationParams();
             params.username = mUsername;
-            params.password = mPassword;
 
             register(context, params, new InternalRegistrationListener() {
                 @Override
                 public void onRegistrationSuccess() {
-                    listener.onUsernameAvailabilityChecked(true);
+                    // The registration could not succeed without password.
+                    // Keep calling listener (the error case) as a fallback,
+                    listener.onUsernameAvailabilityChecked(false);
                 }
 
                 @Override
                 public void onRegistrationFailed(String message) {
-                    if (TextUtils.equals(MatrixError.USER_IN_USE, message)) {
-                        listener.onUsernameAvailabilityChecked(false);
-                    } else {
-                        listener.onUsernameAvailabilityChecked(true);
-                    }
+                    listener.onUsernameAvailabilityChecked(!TextUtils.equals(MatrixError.USER_IN_USE, message));
                 }
             });
         }
@@ -254,10 +252,17 @@ public class RegistrationManager {
             } else if (mEmail != null && !isCompleted(LoginRestClient.LOGIN_FLOW_TYPE_EMAIL_IDENTITY)) {
                 if (TextUtils.isEmpty(mEmail.sid)) {
                     // Email token needs to be requested before doing validation
+                    Log.d(LOG_TAG, "attemptRegistration: request email validation");
                     requestValidationToken(mEmail, new ThreePidRequestListener() {
                         @Override
                         public void onThreePidRequested(ThreePid pid) {
                             if (!TextUtils.isEmpty(pid.sid)) {
+                                // The session id for the email validation has just been received.
+                                // We trigger here a new registration request without delay to attach the current username
+                                // and the pwd to the registration session.
+                                attemptRegistration(context, listener);
+
+                                // Notify the listener to wait for the email validation
                                 listener.onWaitingEmailValidation();
                             }
                         }
@@ -374,7 +379,7 @@ public class RegistrationManager {
         }
 
         RegistrationParams registrationParams = new RegistrationParams();
-        registrationParams.auth = getThreePidAuthParams(aClientSecret, CommonActivityUtils.removeUrlScheme(aIdentityServer),
+        registrationParams.auth = getThreePidAuthParams(aClientSecret, UrlUtilKt.removeUrlScheme(aIdentityServer),
                 aSid, LoginRestClient.LOGIN_FLOW_TYPE_EMAIL_IDENTITY, aSessionId);
 
         // Note: username, password and bind_email must not be set in registrationParams
@@ -565,10 +570,19 @@ public class RegistrationManager {
      * Add email three pid to singleton values
      * It will be processed later on
      *
-     * @param email
+     * @param emailThreePid
      */
-    public void addEmailThreePid(final String email) {
-        mEmail = new ThreePid(email, ThreePid.MEDIUM_EMAIL);
+    public void addEmailThreePid(final ThreePid emailThreePid) {
+        mEmail = emailThreePid;
+    }
+
+    /**
+     * Get the current email three pid (if any).
+     *
+     * @return the corresponding three pid
+     */
+    public ThreePid getEmailThreePid() {
+        return mEmail;
     }
 
     /**
@@ -621,10 +635,10 @@ public class RegistrationManager {
     }
 
     /*
-    * *********************************************************************************************
-    * Private methods
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Private methods
+     * *********************************************************************************************
+     */
 
     /**
      * Get a login rest client
@@ -968,10 +982,10 @@ public class RegistrationManager {
     }
 
     /*
-    * *********************************************************************************************
-    * Private listeners
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Private listeners
+     * *********************************************************************************************
+     */
 
     private interface InternalRegistrationListener {
         void onRegistrationSuccess();
@@ -980,10 +994,10 @@ public class RegistrationManager {
     }
 
     /*
-    * *********************************************************************************************
-    * Public listeners
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Public listeners
+     * *********************************************************************************************
+     */
 
     public interface ThreePidRequestListener {
         void onThreePidRequested(ThreePid pid);

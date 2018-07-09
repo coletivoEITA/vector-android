@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical">
 
     <include
         layout="@layout/vector_message_header"
-        android:visibility="gone" />
+        android:visibility="gone"
+        tools:visibility="visible" />
 
     <LinearLayout
         android:id="@+id/messagesAdapter_body_view"
@@ -26,7 +28,7 @@
             android:layout_height="match_parent"
             android:layout_marginLeft="5dp"
             android:layout_marginRight="5dp"
-            android:background="#f00" />
+            tools:background="@color/vector_green_color" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -93,7 +95,19 @@
                             android:layout_marginLeft="4dp"
                             android:layout_toRightOf="@id/message_adapter_e2e_icon"
                             android:autoLink="all"
-                            android:text="A body"
+                            android:textIsSelectable="false"
+                            android:textSize="14sp"
+                            tools:text="A body" />
+
+                        <TextView
+                            android:id="@+id/messagesAdapter_re_request_e2e_key"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_alignLeft="@+id/messagesAdapter_body"
+                            android:layout_alignStart="@+id/messagesAdapter_body"
+                            android:layout_below="@+id/messagesAdapter_body"
+                            android:layout_gravity="left"
+                            android:text="@string/e2e_re_request_encryption_key"
                             android:textIsSelectable="false"
                             android:textSize="14sp" />
 
@@ -104,6 +118,12 @@
         </LinearLayout>
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/messagesAdapter_urls_preview_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
     <include
         android:id="@+id/messagesAdapter_avatars_list"
         layout="@layout/vector_message_receipts_list" />
@@ -111,12 +131,5 @@
     <include layout="@layout/message_separator" />
 
     <include layout="@layout/message_read_marker" />
-
-    <LinearLayout
-        android:id="@+id/messagesAdapter_urls_preview_list"
-        android:layout_width="match_parent"
-        android:orientation="vertical"
-        android:layout_height="wrap_content">
-    </LinearLayout>
 
 </LinearLayout>

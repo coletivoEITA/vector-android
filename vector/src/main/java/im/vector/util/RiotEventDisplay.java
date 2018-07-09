@@ -1,7 +1,8 @@
 /*
  * Copyright 2016 OpenMarket Ltd
  * Copyright 2017 Vector Creations Ltd
- * 
+ * Copyright 2018 New Vector Ltd
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,9 +23,9 @@ import android.text.TextUtils;
 import com.google.gson.JsonObject;
 
 import org.matrix.androidsdk.data.RoomState;
+import org.matrix.androidsdk.interfaces.HtmlToolbox;
 import org.matrix.androidsdk.rest.model.Event;
 import org.matrix.androidsdk.rest.model.EventContent;
-
 import org.matrix.androidsdk.util.EventDisplay;
 import org.matrix.androidsdk.util.JsonUtils;
 import org.matrix.androidsdk.util.Log;
@@ -36,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 
 import im.vector.R;
-
 import im.vector.widgets.WidgetContent;
 import im.vector.widgets.WidgetsManager;
 
@@ -44,6 +44,11 @@ public class RiotEventDisplay extends EventDisplay {
     private static final String LOG_TAG = RiotEventDisplay.class.getSimpleName();
 
     private static final Map<String, Event> mClosingWidgetEventByStateKey = new HashMap<>();
+
+    // constructor
+    public RiotEventDisplay(Context context, Event event, RoomState roomState, HtmlToolbox htmlToolbox) {
+        super(context, event, roomState, htmlToolbox);
+    }
 
     // constructor
     public RiotEventDisplay(Context context, Event event, RoomState roomState) {
@@ -85,7 +90,8 @@ public class RiotEventDisplay extends EventDisplay {
                         }
                     }
 
-                    String type = (null != closingWidgetEvent) ? WidgetContent.toWidgetContent(closingWidgetEvent.getContentAsJsonObject()).getHumanName() : "undefined";
+                    String type = (null != closingWidgetEvent) ?
+                            WidgetContent.toWidgetContent(closingWidgetEvent.getContentAsJsonObject()).getHumanName() : "undefined";
                     text = mContext.getString(R.string.event_formatter_widget_removed, type, senderDisplayName);
                 } else {
                     String type = WidgetContent.toWidgetContent(mEvent.getContentAsJsonObject()).getHumanName();

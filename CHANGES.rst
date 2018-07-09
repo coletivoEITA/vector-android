@@ -1,3 +1,119 @@
+Changes in Riot 0.8.12 (2018-07-06)
+===================================================
+
+Bugfix:
+ - Fix issue on vanished favorite and low priority room (#2413)
+
+Changes in Riot 0.8.11 (2018-07-03)
+===================================================
+
+Features:
+ - Re-request keys manually for encrypted events (#2319)
+ - Add option to send voice message to a room, using a third application to record message.
+   To enable in the Labs settings (PR #1762)
+
+Improvements:
+ - Update matrix-sdk.aar lib (v0.9.6).
+ - New Floating Action Menu in Home screen (PR #2335)
+ - Add spacing to device keys (#2314)
+ - use apply() instead of commit() to save shared prefs (#2231)
+ - Do not ring if "Do Not Disturb" is active (#1072)
+ - Manage the "consent not given" error when declining a room invite
+
+Other changes:
+ - Remove "Matrix application" activation from the Lab section in the settings (#2341)
+
+Bugfix:
+ - Remove black borders on 18:9 phone (#2063)
+ - Auto dismiss the join/reject room notification when user select an action (#2354)
+ - Fix some crashes reported by the PlayStore (#2380, #2382, #2383, #2395)
+ - Fix issues in UrlPreviews (#2312)
+
+Translations:
+ - Galician thanks to Miguel Branco
+
+Build:
+ - Add script to check code quality
+ - Travis will now check if CHANGES.rst has been modified for each PR
+
+Changes in Riot 0.8.10 (2018-01-06)
+===================================================
+
+Improvements:
+ * Update matrix-sdk.aar lib (v0.9.5).
+ * GDPR compliance:
+    * Account deactivation is now managed natively in a dedicated screen
+
+Features:
+ * Send stickers to a Room
+
+Bug Fix:
+ * Gif do not play anymore (#2168)
+
+Changes in Riot 0.8.9 (2018-05-25)
+===================================================
+
+Improvements:
+ * Update matrix-sdk.aar lib (v0.9.4).
+ * GDPR compliance:
+    * Manage M_CONSENT_NOT_GIVEN matrix error
+    * Sending analytics is now opt-in
+    * Possibility to deactivate account (redirected to the web client for the moment)
+ * Reply to feature: display only
+
+Bug Fix:
+ * Background sync cannot be enabled on F-Droid Riot app (#2196)
+
+Build:
+ * Kotlin is enabled on the project
+ * Travis CI has been enabled to build PRs
+
+Note:
+ * Sending stickers is not enabled yet
+
+Changes in Riot 0.8.8 (2018-05-13)
+===================================================
+
+Bug Fix:
+ * Background sync cannot be enabled on F-Droid Riot app (#2196)
+
+Changes in Riot 0.8.7 (2018-04-25)
+===================================================
+
+Improvements:
+ * Disable sending analytics by default on the F-Droid version
+
+Bug Fix:
+ * Fix issue on Sticker rendering (#2175)
+ * Fix infinite loader issue (#2178)
+
+Changes in Riot 0.8.6 (2018-04-20)
+===================================================
+
+Features:
+ * Render stickers in the timeline (#2097).
+
+Improvements:
+ * Update matrix-sdk.aar lib (v0.9.3).
+ * Notifications: make them user friendly again (#2130).
+ * Add Notification privacy screen (PR #2152).
+ * Hide "Show devices list" for local contacts who are not matrix users (#2153).
+ * Login Activity: Code cleaning.
+
+Bug Fix:
+ * Tapping on a room pill should not automatically join it (#2098).
+ * Notifications: Make the notification for messages no more sticky (PR #2148).
+
+Build:
+ * Update to SDK 27.
+
+Changes in Riot 0.8.5 (2018-03-31)
+===================================================
+
+Improvements: 
+ * Update matrix-sdk.aar lib (v0.9.2).
+ * Make state event redaction handling gentler with homeserver (#2117).
+
 Changes in Riot 0.8.3 (2018-03-16)
 ===================================================
 

@@ -1,5 +1,6 @@
 /*
  * Copyright 2014 OpenMarket Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +61,7 @@ import android.widget.TableRow;
 import android.widget.Toast;
 import android.widget.VideoView;
 
+import org.jetbrains.annotations.NotNull;
 import org.matrix.androidsdk.util.ImageUtils;
 import org.matrix.androidsdk.util.Log;
 import org.matrix.androidsdk.util.ResourceUtils;
@@ -86,8 +88,10 @@ import javax.microedition.khronos.egl.EGLSurface;
 
 import im.vector.R;
 import im.vector.VectorApp;
+import im.vector.util.ViewUtilKt;
 import im.vector.view.RecentMediaLayout;
 import im.vector.view.VideoRecordView;
+import kotlin.Pair;
 
 /**
  * VectorMediasPickerActivity is used to take a photo or to send an old one.
@@ -152,7 +156,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
     }
 
     // recents medias list
-    private final ArrayList<MediaStoreMedia> mMediaStoreMediasList = new ArrayList<>();
+    private final List<MediaStoreMedia> mMediaStoreMediasList = new ArrayList<>();
 
     //
     private MediaStoreMedia mSelectedGalleryImage;
@@ -216,13 +220,19 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
 
     private VideoRecordView mRecordAnimationView;
 
+    @NotNull
+    @Override
+    public Pair getOtherThemes() {
+        return new Pair(R.style.AppTheme_NoActionBar_FullScreen_Dark, R.style.AppTheme_NoActionBar_FullScreen_Black);
+    }
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public int getLayoutRes() {
+        return R.layout.activity_vector_medias_picker;
+    }
 
-        setContentView(R.layout.activity_vector_medias_picker);
-
+    @Override
+    public void initUiAndData() {
         if (CommonActivityUtils.shouldRestartApp(this)) {
             Log.e(LOG_TAG, "Restart the application.");
             CommonActivityUtils.restartApp(this);
@@ -271,21 +281,23 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         mSwitchCameraImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                VectorMediasPickerActivity.this.onSwitchCamera();
+                onSwitchCamera();
             }
         });
 
         mTakeImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                VectorMediasPickerActivity.this.onClickTakeImage();
+                onClickTakeImage();
             }
         });
 
         mTakeImageView.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
-                if (mIsVideoRecordingSupported && CommonActivityUtils.checkPermissions(CommonActivityUtils.REQUEST_CODE_PERMISSION_VIDEO_RECORDING, VectorMediasPickerActivity.this)) {
+                if (mIsVideoRecordingSupported
+                        && CommonActivityUtils.checkPermissions(CommonActivityUtils.REQUEST_CODE_PERMISSION_VIDEO_RECORDING,
+                        VectorMediasPickerActivity.this)) {
                     mRecordAnimationView.startAnimation();
                     startVideoRecord();
                 }
@@ -339,9 +351,11 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         mHandlerThread.start();
         mFileHandler = new android.os.Handler(mHandlerThread.getLooper());
 
-        if (!restoreInstanceState(savedInstanceState)) {
+        if (isFirstCreation()) {
             // default UI: if a taken image is not in preview, then display: live camera preview + "take picture"/switch/exit buttons
             updateUiConfiguration(UI_SHOW_CAMERA_PREVIEW, IMAGE_ORIGIN_CAMERA);
+        } else {
+            restoreInstanceState(getSavedInstanceState());
         }
 
         // Force screen orientation be managed by the sensor in case user's setting turned off
@@ -419,47 +433,40 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
      * Restores the saved instance.
      *
      * @param savedInstanceState the savedInstanceState
-     * @return true if some items have been restored
      */
-    private boolean restoreInstanceState(Bundle savedInstanceState) {
-        boolean isRestoredInstance = false;
+    private void restoreInstanceState(@NonNull Bundle savedInstanceState) {
+        mIsAvatarMode = savedInstanceState.getBoolean(KEY_IS_AVATAR_MODE);
+        mIsTakenImageDisplayed = savedInstanceState.getBoolean(KEY_EXTRA_IS_TAKEN_IMAGE_DISPLAYED);
+        mShotPicturePath = savedInstanceState.getString(KEY_EXTRA_TAKEN_IMAGE_CAMERA_URL);
+        mTakenImageOrigin = savedInstanceState.getInt(KEY_EXTRA_TAKEN_IMAGE_ORIGIN);
 
-        if (null != savedInstanceState) {
-            isRestoredInstance = true;
-            mIsAvatarMode = savedInstanceState.getBoolean(KEY_IS_AVATAR_MODE);
-            mIsTakenImageDisplayed = savedInstanceState.getBoolean(KEY_EXTRA_IS_TAKEN_IMAGE_DISPLAYED);
-            mShotPicturePath = savedInstanceState.getString(KEY_EXTRA_TAKEN_IMAGE_CAMERA_URL);
-            mTakenImageOrigin = savedInstanceState.getInt(KEY_EXTRA_TAKEN_IMAGE_ORIGIN);
+        // restore gallery image preview (the image can be saved from the preview even after rotation)
+        Uri uriImage = savedInstanceState.getParcelable(KEY_EXTRA_TAKEN_IMAGE_GALLERY_URI);
+        mImagePreviewImageView.setTag(uriImage);
 
-            // restore gallery image preview (the image can be saved from the preview even after rotation)
-            Uri uriImage = savedInstanceState.getParcelable(KEY_EXTRA_TAKEN_IMAGE_GALLERY_URI);
-            mImagePreviewImageView.setTag(uriImage);
+        mVideoUri = savedInstanceState.getParcelable(KEY_EXTRA_TAKEN_VIDEO_URI);
 
-            mVideoUri = savedInstanceState.getParcelable(KEY_EXTRA_TAKEN_VIDEO_URI);
-
-            // display a preview image?
-            if (mIsTakenImageDisplayed) {
-                Bitmap savedBitmap = VectorApp.getSavedPickerImagePreview();
-                if ((null != savedBitmap) && !mIsAvatarMode) {
-                    // image preview from camera only
-                    mImagePreviewImageView.setImageBitmap(savedBitmap);
-                } else {
-                    // image preview from gallery or camera (mShootedPicturePath)
-                    displayImagePreview(savedBitmap, mShotPicturePath, uriImage, mTakenImageOrigin);
-                }
-            }
-
-            // restore UI display
-            updateUiConfiguration(mIsTakenImageDisplayed, mTakenImageOrigin);
-
-            // general data to be restored
-            mCameraId = savedInstanceState.getInt(KEY_EXTRA_CAMERA_SIDE);
-
-            if (null != mVideoUri) {
-                startVideoPreviewVideo(null);
+        // display a preview image?
+        if (mIsTakenImageDisplayed) {
+            Bitmap savedBitmap = VectorApp.getSavedPickerImagePreview();
+            if ((null != savedBitmap) && !mIsAvatarMode) {
+                // image preview from camera only
+                mImagePreviewImageView.setImageBitmap(savedBitmap);
+            } else {
+                // image preview from gallery or camera (mShootedPicturePath)
+                displayImagePreview(savedBitmap, mShotPicturePath, uriImage, mTakenImageOrigin);
             }
         }
-        return isRestoredInstance;
+
+        // restore UI display
+        updateUiConfiguration(mIsTakenImageDisplayed, mTakenImageOrigin);
+
+        // general data to be restored
+        mCameraId = savedInstanceState.getInt(KEY_EXTRA_CAMERA_SIDE);
+
+        if (null != mVideoUri) {
+            startVideoPreviewVideo(null);
+        }
     }
 
     /**
@@ -569,7 +576,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
             android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
             android.hardware.Camera.getCameraInfo(mCameraId, info);
 
-            int rotation = this.getWindowManager().getDefaultDisplay().getRotation();
+            int rotation = getWindowManager().getDefaultDisplay().getRotation();
             int degrees = 0;
             switch (rotation) {
                 case Surface.ROTATION_0:
@@ -841,8 +848,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
      * @param aOrigin          CAMERA or GALLERY
      */
     private void displayImagePreview(final Bitmap bitmap, final String aCameraImageUrl, final Uri aGalleryImageUri, final int aOrigin) {
-        final RelativeLayout progressBar = findViewById(R.id.medias_preview_progress_bar_layout);
-        progressBar.setVisibility(View.VISIBLE);
+        setWaitingView(findViewById(R.id.medias_preview_progress_bar_layout));
+        showWaitingView();
         mTakeImageView.setEnabled(false);
 
         Bitmap newBitmap = bitmap;
@@ -908,8 +915,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
                 int imageW = newBitmap.getWidth();
                 int imageH = newBitmap.getHeight();
 
-                int screenHeight = this.getWindow().getDecorView().getHeight();
-                int screenWidth = this.getWindow().getDecorView().getWidth();
+                int screenHeight = getWindow().getDecorView().getHeight();
+                int screenWidth = getWindow().getDecorView().getWidth();
 
                 if ((0 == screenHeight) || (0 == screenWidth)) {
                     mImagePreviewImageView.post(new Runnable() {
@@ -940,7 +947,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
 
         mTakeImageView.setEnabled(true);
         updateUiConfiguration(UI_SHOW_TAKEN_IMAGE, aOrigin);
-        progressBar.setVisibility(View.GONE);
+        hideWaitingView();
     }
 
     /**
@@ -1134,10 +1141,10 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         String nameRetValue = "VectorImage_" + new SimpleDateFormat("yyyy-MM-dd_hhmmss").format(new Date()) + ".jpg";
 
         // save new name in preference
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putString(KEY_PREFERENCE_CAMERA_IMAGE_NAME, nameRetValue);
-        editor.commit();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putString(KEY_PREFERENCE_CAMERA_IMAGE_NAME, nameRetValue)
+                .apply();
 
         return nameRetValue;
     }
@@ -1376,7 +1383,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
             // assume that only one camera can be used.
             mSwitchCameraImageView.setVisibility(View.GONE);
             try {
-                mCamera = Camera.open((Camera.CameraInfo.CAMERA_FACING_BACK == mCameraId) ? Camera.CameraInfo.CAMERA_FACING_FRONT : Camera.CameraInfo.CAMERA_FACING_BACK);
+                mCamera = Camera.open((Camera.CameraInfo.CAMERA_FACING_BACK == mCameraId) ?
+                        Camera.CameraInfo.CAMERA_FACING_FRONT : Camera.CameraInfo.CAMERA_FACING_BACK);
             } catch (Exception e) {
                 Log.e(LOG_TAG, "Cannot open the camera " + mCameraId + " " + e.getMessage());
             }
@@ -1532,7 +1540,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
             camcorderProfile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
         }
 
-        Log.d(LOG_TAG, "getCamcorderProfile for camera " + cameraId + " width " + camcorderProfile.videoFrameWidth + " height " + camcorderProfile.videoFrameWidth);
+        Log.d(LOG_TAG, "getCamcorderProfile for camera " + cameraId
+                + " width " + camcorderProfile.videoFrameWidth + " height " + camcorderProfile.videoFrameWidth);
         return camcorderProfile;
     }
 
@@ -1551,7 +1560,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
         android.hardware.Camera.getCameraInfo(mCameraId, info);
 
-        int rotation = this.getWindowManager().getDefaultDisplay().getRotation();
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
         int degrees = 0;
         switch (rotation) {
             case Surface.ROTATION_0:
@@ -1583,7 +1592,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         if (null != mCamera) {
             // lock the orientation
             mActivityOrientation = getRequestedOrientation();
-            setRequestedOrientation((Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) ? ActivityInfo.SCREEN_ORIENTATION_LOCKED : ActivityInfo.SCREEN_ORIENTATION_NOSENSOR);
+            setRequestedOrientation((Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) ?
+                    ActivityInfo.SCREEN_ORIENTATION_LOCKED : ActivityInfo.SCREEN_ORIENTATION_NOSENSOR);
 
             mTakeImageView.setAlpha(0.0f);
             mRecordAnimationView.setVisibility(View.VISIBLE);
@@ -1805,7 +1815,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
      * @return the medias list
      */
     private List<MediaStoreMedia> listLatestMedias() {
-        ArrayList<MediaStoreMedia> mediasList = new ArrayList<>();
+        List<MediaStoreMedia> mediasList = new ArrayList<>();
 
         // images
         String[] imagesProjection = {MediaStore.Images.ImageColumns._ID, MediaStore.Images.ImageColumns.DATE_TAKEN, MediaStore.Images.ImageColumns.MIME_TYPE};
@@ -1837,7 +1847,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
                         recentMedia.mMimeType = imagesThumbnailsCursor.getString(mimeTypeIndex);
                         recentMedia.mCreationTime = Long.parseLong(dateAsString);
 
-                        recentMedia.mThumbnail = MediaStore.Images.Thumbnails.getThumbnail(this.getContentResolver(), Long.parseLong(id), MediaStore.Images.Thumbnails.MINI_KIND, null);
+                        recentMedia.mThumbnail = MediaStore.Images.Thumbnails.getThumbnail(getContentResolver(),
+                                Long.parseLong(id), MediaStore.Images.Thumbnails.MINI_KIND, null);
                         recentMedia.mFileUri = Uri.parse(MediaStore.Images.Media.EXTERNAL_CONTENT_URI.toString() + "/" + id);
 
                         int rotationAngle = ImageUtils.getRotationAngleForBitmap(VectorMediasPickerActivity.this, recentMedia.mFileUri);
@@ -1845,7 +1856,13 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
                         if (0 != rotationAngle) {
                             android.graphics.Matrix bitmapMatrix = new android.graphics.Matrix();
                             bitmapMatrix.postRotate(rotationAngle);
-                            recentMedia.mThumbnail = Bitmap.createBitmap(recentMedia.mThumbnail, 0, 0, recentMedia.mThumbnail.getWidth(), recentMedia.mThumbnail.getHeight(), bitmapMatrix, false);
+                            recentMedia.mThumbnail = Bitmap.createBitmap(recentMedia.mThumbnail,
+                                    0,
+                                    0,
+                                    recentMedia.mThumbnail.getWidth(),
+                                    recentMedia.mThumbnail.getHeight(),
+                                    bitmapMatrix,
+                                    false);
                         }
 
                         mediasList.add(recentMedia);
@@ -1864,7 +1881,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
             Cursor videoThumbnailsCursor = null;
 
             try {
-                videoThumbnailsCursor = this.getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                videoThumbnailsCursor = getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                         videosProjection, // Which columns to return
                         null,       // Return all image files
                         null,
@@ -1889,7 +1906,8 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
                             recentMedia.mMimeType = videoThumbnailsCursor.getString(mimeTypeIndex);
                             recentMedia.mCreationTime = Long.parseLong(dateAsString);
 
-                            recentMedia.mThumbnail = MediaStore.Video.Thumbnails.getThumbnail(this.getContentResolver(), Long.parseLong(id), MediaStore.Video.Thumbnails.MINI_KIND, null);
+                            recentMedia.mThumbnail = MediaStore.Video.Thumbnails.getThumbnail(getContentResolver(),
+                                    Long.parseLong(id), MediaStore.Video.Thumbnails.MINI_KIND, null);
                             recentMedia.mFileUri = Uri.parse(MediaStore.Video.Media.EXTERNAL_CONTENT_URI.toString() + "/" + id);
 
                             mediasList.add(recentMedia);
@@ -1933,7 +1951,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         Cursor imageThumbnailsCursor = null;
 
         try {
-            imageThumbnailsCursor = this.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            imageThumbnailsCursor = getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     null, // no projection
                     null,
                     null,
@@ -1951,7 +1969,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
             Cursor videoThumbnailsCursor = null;
 
             try {
-                videoThumbnailsCursor = this.getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                videoThumbnailsCursor = getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                         null, // no projection
                         null,
                         null,
@@ -1996,7 +2014,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
         final RelativeLayout progressBar = findViewById(R.id.medias_preview_progress_bar_layout);
         progressBar.setVisibility(View.VISIBLE);
         mTakeImageView.setEnabled(false);
-        mTakeImageView.setAlpha(CommonActivityUtils.UTILS_OPACITY_HALF);
+        mTakeImageView.setAlpha(ViewUtilKt.UTILS_OPACITY_HALF);
 
         mMediaStoreMediasList.clear();
 
@@ -2015,7 +2033,7 @@ public class VectorMediasPickerActivity extends MXCActionBarActivity implements 
                         buildGalleryTableLayout();
                         progressBar.setVisibility(View.GONE);
                         mTakeImageView.setEnabled(true);
-                        mTakeImageView.setAlpha(CommonActivityUtils.UTILS_OPACITY_NONE);
+                        mTakeImageView.setAlpha(ViewUtilKt.UTILS_OPACITY_FULL);
                     }
                 });
             }

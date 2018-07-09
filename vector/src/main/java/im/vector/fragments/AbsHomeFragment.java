@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +21,6 @@ import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.annotation.CallSuper;
 import android.support.annotation.Nullable;
-import android.support.v4.app.Fragment;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.view.MenuItem;
@@ -39,10 +39,9 @@ import org.matrix.androidsdk.util.Log;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
-import butterknife.ButterKnife;
-import butterknife.Unbinder;
 import im.vector.Matrix;
 import im.vector.R;
 import im.vector.activity.CommonActivityUtils;
@@ -54,13 +53,13 @@ import im.vector.util.RoomUtils;
 /**
  * Abstract fragment providing the universal search
  */
-public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.RoomInvitationListener, AbsAdapter.MoreRoomActionListener, RoomUtils.MoreActionListener {
+public abstract class AbsHomeFragment extends VectorBaseFragment implements
+        AbsAdapter.RoomInvitationListener,
+        AbsAdapter.MoreRoomActionListener,
+        RoomUtils.MoreActionListener {
 
     private static final String LOG_TAG = AbsHomeFragment.class.getSimpleName();
     private static final String CURRENT_FILTER = "CURRENT_FILTER";
-
-    // Butterknife unbinder
-    private Unbinder mUnBinder;
 
     VectorHomeActivity mActivity;
 
@@ -75,7 +74,7 @@ public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.Roo
         public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
             // warn only if there is dy i.e the list has been really scrolled not refreshed
             if ((null != mActivity) && (0 != dy)) {
-                mActivity.hideFloatingActionButton(AbsHomeFragment.this.getTag());
+                mActivity.hideFloatingActionButton(getTag());
             }
         }
     };
@@ -94,13 +93,6 @@ public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.Roo
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
-    }
-
-    @Override
-    @CallSuper
-    public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        mUnBinder = ButterKnife.bind(this, view);
     }
 
     @Override
@@ -148,7 +140,6 @@ public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.Roo
     @CallSuper
     public void onDestroyView() {
         super.onDestroyView();
-        mUnBinder.unbind();
         mCurrentFilter = null;
     }
 
@@ -346,7 +337,7 @@ public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.Roo
             CommonActivityUtils.specificUpdateBadgeUnreadCount(mSession, getContext());
 
             // Launch corresponding room activity
-            HashMap<String, Object> params = new HashMap<>();
+            Map<String, Object> params = new HashMap<>();
             params.put(VectorRoomActivity.EXTRA_MATRIX_ID, mSession.getMyUserId());
             params.put(VectorRoomActivity.EXTRA_ROOM_ID, roomId);
 
@@ -411,7 +402,7 @@ public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.Roo
             mActivity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mActivity.stopWaitingView();
+                    mActivity.hideWaitingView();
                     if (!TextUtils.isEmpty(errorMessage)) {
                         Toast.makeText(mActivity, errorMessage, Toast.LENGTH_SHORT).show();
                     }
@@ -431,7 +422,7 @@ public abstract class AbsHomeFragment extends Fragment implements AbsAdapter.Roo
             public void onSuccess(Void info) {
                 // check if the activity is still attached
                 if ((null != mActivity) && !mActivity.isFinishing()) {
-                    mActivity.stopWaitingView();
+                    mActivity.hideWaitingView();
                     mActivity.refreshUnreadBadges();
 
                     // if the fragment is still the active one
