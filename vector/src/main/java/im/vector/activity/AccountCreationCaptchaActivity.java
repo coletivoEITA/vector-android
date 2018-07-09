@@ -1,5 +1,6 @@
 /*
  * Copyright 2016 OpenMarket Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +18,12 @@
 package im.vector.activity;
 
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.net.http.SslError;
 import android.os.Build;
-import android.os.Bundle;
+import android.support.v7.app.AlertDialog;
 import android.text.TextUtils;
-
-import org.matrix.androidsdk.util.Log;
-
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.SslErrorHandler;
@@ -40,17 +36,19 @@ import android.widget.Toast;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import im.vector.R;
-import im.vector.util.VectorUtils;
+import org.matrix.androidsdk.util.Log;
 
 import java.net.URLDecoder;
 import java.util.Formatter;
 import java.util.HashMap;
+import java.util.Map;
+
+import im.vector.R;
 
 /**
  * AccountCreationCaptchaActivity displays a webview to check captchas.
  */
-public class AccountCreationCaptchaActivity extends RiotBaseActivity {
+public class AccountCreationCaptchaActivity extends RiotAppCompatActivity {
     private static final String LOG_TAG = AccountCreationCaptchaActivity.class.getSimpleName();
 
     public static final String EXTRA_HOME_SERVER_URL = "AccountCreationCaptchaActivity.EXTRA_HOME_SERVER_URL";
@@ -85,13 +83,17 @@ public class AccountCreationCaptchaActivity extends RiotBaseActivity {
             " </html> ";
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public int getLayoutRes() {
+        return R.layout.activity_vector_registration_captcha;
+    }
 
-        // required to have the right translated title
-        setTitle(R.string.create_account);
-        setContentView(R.layout.activity_vector_registration_captcha);
+    @Override
+    public int getTitleRes() {
+        return R.string.create_account;
+    }
 
+    @Override
+    public void initUiAndData() {
         final WebView webView = findViewById(R.id.account_creation_webview);
         webView.getSettings().setJavaScriptEnabled(true);
 
@@ -129,53 +131,47 @@ public class AccountCreationCaptchaActivity extends RiotBaseActivity {
             public void onReceivedSslError(final WebView view, final SslErrorHandler handler, final SslError error) {
                 Log.e(LOG_TAG, "## onReceivedSslError() : " + error.getCertificate());
 
-                AlertDialog.Builder builder = new AlertDialog.Builder(AccountCreationCaptchaActivity.this);
-
-                builder.setMessage(R.string.ssl_could_not_verify);
-
-                builder.setPositiveButton(R.string.ssl_trust, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Log.d(LOG_TAG, "## onReceivedSslError() : the user trusted");
-                        handler.proceed();
-                    }
-                });
-
-                builder.setNegativeButton(R.string.ssl_do_not_trust, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Log.d(LOG_TAG, "## onReceivedSslError() : the user did not trust");
-                        handler.cancel();
-                    }
-                });
-
-                builder.setOnKeyListener(new DialogInterface.OnKeyListener() {
-                    @Override
-                    public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
-                        if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-                            handler.cancel();
-                            Log.d(LOG_TAG, "## onReceivedSslError() : the user dismisses the trust dialog.");
-                            dialog.dismiss();
-                            return true;
-                        }
-                        return false;
-                    }
-                });
-
-                AlertDialog dialog = builder.create();
-                dialog.show();
+                new AlertDialog.Builder(AccountCreationCaptchaActivity.this)
+                        .setMessage(R.string.ssl_could_not_verify)
+                        .setPositiveButton(R.string.ssl_trust, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                Log.d(LOG_TAG, "## onReceivedSslError() : the user trusted");
+                                handler.proceed();
+                            }
+                        })
+                        .setNegativeButton(R.string.ssl_do_not_trust, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                Log.d(LOG_TAG, "## onReceivedSslError() : the user did not trust");
+                                handler.cancel();
+                            }
+                        })
+                        .setOnKeyListener(new DialogInterface.OnKeyListener() {
+                            @Override
+                            public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
+                                if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                                    handler.cancel();
+                                    Log.d(LOG_TAG, "## onReceivedSslError() : the user dismisses the trust dialog.");
+                                    dialog.dismiss();
+                                    return true;
+                                }
+                                return false;
+                            }
+                        })
+                        .show();
             }
 
             // common error message
             private void onError(String errorMessage) {
                 Log.e(LOG_TAG, "## onError() : errorMessage");
                 Toast.makeText(AccountCreationCaptchaActivity.this, errorMessage, Toast.LENGTH_LONG).show();
-                
+
                 // on error case, close this activity
-                AccountCreationCaptchaActivity.this.runOnUiThread(new Runnable() {
+                runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        AccountCreationCaptchaActivity.this.finish();
+                        finish();
                     }
                 });
             }
@@ -202,7 +198,7 @@ public class AccountCreationCaptchaActivity extends RiotBaseActivity {
             public boolean shouldOverrideUrlLoading(android.webkit.WebView view, java.lang.String url) {
                 if ((null != url) && url.startsWith("js:")) {
                     String json = url.substring(3);
-                    HashMap<String, String> parameters = null;
+                    Map<String, String> parameters = null;
 
                     try {
                         // URL decode
@@ -225,7 +221,7 @@ public class AccountCreationCaptchaActivity extends RiotBaseActivity {
                                 returnIntent.putExtra("response", parameters.get("response"));
                                 setResult(RESULT_OK, returnIntent);
 
-                                AccountCreationCaptchaActivity.this.finish();
+                                finish();
                             }
                         }
                     }

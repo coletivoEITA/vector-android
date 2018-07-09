@@ -1,5 +1,6 @@
 /*
  * Copyright 2016 OpenMarket Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +24,10 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.TabLayout;
 import android.support.v4.view.ViewPager;
 import android.text.TextUtils;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.fragments.MatrixMessageListFragment;
@@ -61,7 +62,6 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
     private ImageView mBackgroundImageView;
     private TextView mNoResultsTxtView;
     private View mLoadOldestContentView;
-    private View mWaitWhileSearchInProgressView;
 
     private String mRoomId;
 
@@ -71,10 +71,13 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
     private int mPosition;
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public int getLayoutRes() {
+        return R.layout.activity_vector_unified_search;
+    }
 
-        setContentView(R.layout.activity_vector_unified_search);
+    @Override
+    public void initUiAndData() {
+        super.initUiAndData();
 
         if (CommonActivityUtils.shouldRestartApp(this)) {
             Log.e(LOG_TAG, "Restart the application.");
@@ -99,7 +102,7 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
         // UI widgets binding & init fields
         mBackgroundImageView = findViewById(R.id.search_background_imageview);
         mNoResultsTxtView = findViewById(R.id.search_no_result_textview);
-        mWaitWhileSearchInProgressView = findViewById(R.id.search_in_progress_view);
+        setWaitingView(findViewById(R.id.search_in_progress_view));
         mLoadOldestContentView = findViewById(R.id.search_load_oldest_progress);
 
         if (null != getIntent()) {
@@ -143,12 +146,12 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
         if ((null != getIntent()) && getIntent().hasExtra(EXTRA_TAB_INDEX)) {
             mPosition = getIntent().getIntExtra(EXTRA_TAB_INDEX, 0);
         } else {
-            mPosition = (null != savedInstanceState) ? savedInstanceState.getInt(KEY_STATE_CURRENT_TAB_INDEX, 0) : 0;
+            mPosition = isFirstCreation() ? 0 : getSavedInstanceState().getInt(KEY_STATE_CURRENT_TAB_INDEX, 0);
         }
         mViewPager.setCurrentItem(mPosition);
 
         // restore the searched pattern
-        mPatternToSearchEditText.setText((null != savedInstanceState) ? savedInstanceState.getString(KEY_STATE_SEARCH_PATTERN, null) : null);
+        mPatternToSearchEditText.setText(isFirstCreation() ? null:  getSavedInstanceState().getString(KEY_STATE_SEARCH_PATTERN, null));
     }
 
     @Override
@@ -187,7 +190,7 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
         });
 
         if (isRemoteSearching) {
-            mWaitWhileSearchInProgressView.setVisibility(View.VISIBLE);
+            showWaitingView();
         }
     }
 
@@ -204,17 +207,6 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
         searchAccordingToSelectedTab();
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            // ignore the parent activity from manifest to avoid going to the home history
-            case android.R.id.home:
-                finish();
-                return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
     /**
      * Reset the UI to its init state:
      * - "waiting while searching" screen disabled
@@ -225,9 +217,7 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
      */
     private void resetUi(boolean showBackgroundImage) {
         // stop "wait while searching" screen
-        if (null != mWaitWhileSearchInProgressView) {
-            mWaitWhileSearchInProgressView.setVisibility(View.GONE);
-        }
+        hideWaitingView();
 
         // display the background
         if (null != mBackgroundImageView) {
@@ -253,7 +243,7 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
         if (mViewPager.getCurrentItem() == tabIndex) {
             Log.d(LOG_TAG, "## onSearchEnd() nbrMsg=" + nbrMessages);
             // stop "wait while searching" screen
-            mWaitWhileSearchInProgressView.setVisibility(View.GONE);
+            hideWaitingView();
 
             // display the background view if there is no pending such
             mBackgroundImageView.setVisibility(!mPagerAdapter.isSearchInPeoplesFragment(tabIndex)
@@ -262,7 +252,8 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
                     : View.GONE);
 
             // display the "no result" text only if the researched text is not empty
-            mNoResultsTxtView.setVisibility(((0 == nbrMessages) && !TextUtils.isEmpty(mPatternToSearchEditText.getText().toString())) ? View.VISIBLE : View.GONE);
+            mNoResultsTxtView.setVisibility(((0 == nbrMessages)
+                    && !TextUtils.isEmpty(mPatternToSearchEditText.getText().toString())) ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -279,7 +270,7 @@ public class VectorUnifiedSearchActivity extends VectorBaseSearchActivity implem
                 searchAccordingToSelectedTab();
             } else {
                 Log.d(LOG_TAG, "## onRequestPermissionsResult(): READ_CONTACTS permission not granted");
-                CommonActivityUtils.displayToast(this, getString(R.string.missing_permissions_warning));
+                Toast.makeText(this, R.string.missing_permissions_warning, Toast.LENGTH_SHORT).show();
             }
         }
     }

@@ -2,8 +2,8 @@
 <resources>
     <!-- use to retrieve the supported languages list -->
     <!-- should the same value as the file name -->
-    <string name="resouces_language">de</string>
-    <string name="resouces_country">DE</string>
+    <string name="resources_language">de</string>
+    <string name="resources_country_code">DE</string>
 
     <!-- titles -->
     <string name="title_activity_home">Nachrichten</string>
@@ -32,7 +32,7 @@
     <string name="rename">Umbenennen</string>
     <string name="report_content">Inhalt melden</string>
     <string name="active_call">Aktives Gespräch</string>
-    <string name="ongoing_conference_call">" Konferenzgespräch läuft. Per Sprach-Chat oder per Video-Chat beitreten."</string>
+    <string name="ongoing_conference_call">" Konferenzgespräch läuft. Per Sprache oder Video beitreten."</string>
     <string name="ongoing_conference_call_voice">Sprache</string>
     <string name="ongoing_conference_call_video">Video</string>
     <string name="cannot_start_call">Das Gespräch kann nicht gestartet werden, bitte später erneut versuchen</string>
@@ -448,7 +448,7 @@ Bist du sicher?</string>
     <!-- home sliding menu -->
     <string name="room_sliding_menu_messages">Nachrichten</string>
     <string name="room_sliding_menu_settings">Einstellungen</string>
-    <string name="room_sliding_menu_version">Version </string>
+    <string name="room_sliding_menu_version">Version</string>
     <string name="room_sliding_menu_term_and_conditions">Nutzungsbedingungen</string>
     <string name="room_sliding_menu_third_party_notices">Nutzungshinweise von Drittanbietern</string>
     <string name="room_sliding_menu_copyright">Urheberrechtserklärung</string>
@@ -503,7 +503,7 @@ Bist du sicher?</string>
     <string name="settings_contacts_app_permission">Kontaktzugriffsberechtigung</string>
     <string name="settings_contacts_phonebook_country">Telefonbuch-Land</string>
     <string name="settings_home_display">Startseite</string>
-    <string name="settings_pin_missed_notifications">Räume mit verpassten Benachrichtigungen anheften</string>
+    <string name="settings_pin_missed_notifications">Räume mit ungelesenen Benachrichtigungen anheften</string>
     <string name="settings_pin_unread_messages">Räume mit ungelesenen Nachrichten anheften</string>
     <string name="settings_devices_list">Geräte</string>
     <string name="devices_details_dialog_title">Geräte-Details</string>
@@ -672,7 +672,7 @@ Verschlüsselte Nachrichten werden auf Matrix-Clients, auf denen die Verschlüss
     <string name="encryption_import_room_keys_summary">Schlüssel aus lokaler Datei importieren</string>
     <string name="encryption_import_import">Importieren</string>
     <string name="encryption_never_send_to_unverified_devices_title">Nur für verifizierte Geräte verschlüsseln</string>
-    <string name="encryption_never_send_to_unverified_devices_summary">Von diesem Gerät aus keine verschlüsselten Nachrichten an unbestätigte Geräte senden</string>
+    <string name="encryption_never_send_to_unverified_devices_summary">Von diesem Gerät aus keine verschlüsselten Nachrichten an nicht verifizierte Geräte senden</string>
 
     <string name="encryption_information_not_verified">NICHT verifiziert</string>
     <string name="encryption_information_verified">Verifiziert</string>
@@ -757,10 +757,10 @@ Unbekannte Geräte:</string>
     <string name="widget_creation_failure">Widget konnte nicht erstellt werden</string>
     <string name="event_formatter_widget_added">%1$s hinzugefügt von %2$s</string>
     <string name="event_formatter_widget_removed">%1$s entfernt von %2$s</string>
-    <string name="settings_labs_create_conference_with_jitsi">Konferenzgespräche mit jitsi aufbauen</string>
+    <string name="settings_labs_create_conference_with_jitsi">Konferenzgespräche mit jitsi durchführen</string>
     <string name="widget_delete_message_confirmation">Soll das Widget wirklich gelöscht werden?</string>
 
-    // Widget Integration Manager
+    <!-- Widget Integration Manager -->
     <string name="widget_integration_unable_to_create">Widget konnte nicht erstellt werden.</string>
     <string name="widget_integration_positive_power_level">Berechtigungslevel muss eine positive ganze Zahl sein.</string>
     <string name="widget_integration_must_be_in_room">Du bist nicht Mitglied in diesem Raum.</string>
@@ -788,7 +788,7 @@ Unbekannte Geräte:</string>
     <string name="start_verification">Verifizierung starten</string>
     <string name="call">Anruf</string>
     <string name="notification_noisy_notifications">Laute Benachrichtigungen</string>
-    <string name="notification_silent_notifications">Leise Benachrichtigungen</string>
+    <string name="notification_silent_notifications">Lautlose Benachrichtigungen</string>
 
     <string name="option_take_photo">Foto aufnehmen</string>
     <string name="option_take_video">Video aufnehmen</string>
@@ -798,7 +798,7 @@ Unbekannte Geräte:</string>
 
     <string name="settings_labs_native_camera">Systemeigene Kamera verwenden</string>
 
-    // share keys
+    <!-- share keys -->
     <string name="share_without_verifying">Ohne Verifizierung teilen</string>
     <string name="ignore_request">Anfrage ignorieren</string>
 
@@ -809,11 +809,11 @@ Unbekannte Geräte:</string>
     <string name="conference_call_warning_title">Warnung!</string>
     <string name="conference_call_warning_message">Konferenzgespräche werden noch entwickelt und sind vielleicht nicht zuverlässig.</string>
 
-    // slash commands
+    <!-- slash commands -->
     <string name="command_error">Befehlsfehler</string>
     <string name="unrecognized_command">Unbekanntes Kommando: %s</string>
 
-    // notification statuses
+    <!-- notification statuses -->
     <string name="notification_off">Aus</string>
     <string name="notification_on">An</string>
     <string name="notification_noisy">Laut</string>
@@ -863,7 +863,7 @@ Unbekannte Geräte:</string>
     <string name="community_id">Community-ID</string>
     <string name="community_id_hint">Beispiel</string>
 
-    // group details
+    <!-- group details -->
     <string name="group_details_home">Startseite</string>
     <string name="group_details_people">Personen</string>
     <string name="group_details_rooms">Räume</string>
@@ -940,7 +940,7 @@ Unbekannte Geräte:</string>
 	<item quantity="other">%d aktive Widgets</item>
 </plurals>
 
-    // Widget Integration Manager
+    <!-- Widget Integration Manager -->
     <string name="avatar">Profilbild</string>
 
 <plurals name="membership_changes">
@@ -953,6 +953,76 @@ Unbekannte Geräte:</string>
     <string name="open_chat_header">Öffne Chat-Kopf</string>
     <string name="receipt_avatar">Lesebestätigungs-Profilbild</string>
     <string name="notice_avatar">Notiz-Avatar</string>
-    <string name="settings_enable_content_sending">Behalte detailierte Benachrichtigungen</string>
-    <string name="settings_enable_content_sending_summary">Aktiviere diese Option, wenn die Hintergrundsynchronisierung für detaillierte Benachrichtigungen deaktiviert wurde. Dies führt dazu, dass unverschlüsselter Nachrichten-Inhalt durch Google-Server geleitet wird</string>
-    </resources>
+    <string name="settings_notification_privacy">Datenschutz für Benachrichtigungen</string>
+    <string name="settings_notification_privacy_warning">Riot.im läuft im Hintergrund um den Benachrichtigungsinhalt privat zu halten. Du kannst diese Option ändern um den Stromverbrauch zu reduzieren.</string>
+    <string name="settings_notification_privacy_normal">Normal</string>
+    <string name="settings_notification_privacy_power_saving">Energiesparoptionen</string>
+    <string name="settings_notification_privacy_low_detail">Informationsarme Benachrichtigung</string>
+    <string name="settings_notification_privacy_reduced">Verringerter Datenschutz</string>
+    <string name="settings_notification_privacy_need_permission">Dies App braucht die Berechtigung im Hintergrund zu laufen</string>
+    <string name="settings_notification_privacy_no_permission">Die App braucht die Berechtigung im Hintergrund zu laufen <b>nicht</b></string>
+    <string name="settings_notification_privacy_gcm">• Benachrichtigungen werden über Google Cloud Messaging versendet</string>
+    <string name="settings_notification_privacy_metadata">• Benachrichtigungen enthalten nur Metadaten</string>
+    <string name="settings_notification_privacy_secure_message_content">• Der Nachrichteninhalt der Benachrichtigung wird <b>sicher vom Matrix-Heimserver abgerufen</b></string>
+    <string name="settings_notification_privacy_nosecure_message_content">• Benachrichtigungen enthalten <b>Metadaten und Nachrichteninhalte</b></string>
+    <string name="settings_notification_privacy_message_content_not_shown">• Benachrichtigungen werden <b>den Nachrichteninhalt nicht anzeigen</b></string>
+
+    <string name="startup_notification_privacy_title">Benachrichtungs-Datenschutz</string>
+    <string name="startup_notification_privacy_message">Riot.im kann im Hintergrund laufen um deine Benachrichtigungen sicher und privat zu verwalten (dies kann den Energieverbrauch beeinflussen).</string>
+    <string name="startup_notification_privacy_button_grant">Berechtigung gewähren</string>
+    <string name="startup_notification_privacy_button_other">Wähle eine andere Option</string>
+
+    <string name="title_activity_choose_sticker">Sende einen Sticker</string>
+
+    <string name="option_send_sticker">Sende Sticker</string>
+    <string name="no_sticker_application_dialog_content">Du hast aktuell keine Stickerpackete aktiviert.
+
+Willst du welche hinzufügen?</string>
+
+    <string name="settings_deactivate_account_section">Deaktiviere Account</string>
+    <string name="settings_deactivate_my_account">Deaktivere meinen Account</string>
+
+    <string name="settings_opt_in_of_analytics">Sende Analysedaten</string>
+    <string name="settings_opt_in_of_analytics_summary">Riot sammelt anonyme Analysedaten um uns zu helfen, die App zu verbessern.</string>
+    <string name="settings_opt_in_of_analytics_prompt">Bitte aktive Analysedaten um uns zu helfen Riot zu verbessern.</string>
+    <string name="settings_opt_in_of_analytics_ok">Ja, ich möchte helfen!</string>
+
+    <string name="widget_integration_missing_parameter">Ein benötigter Parameter fehlt.</string>
+    <string name="widget_integration_invalid_parameter">Ein Parameter ist nicht valide.</string>
+    <string name="dialog_user_consent_content">Um %1$s weiter zu verwenden, musst die Geschäftsbedingungen begutachten und ihnen zustimmen.</string>
+    <string name="dialog_user_consent_submit">Jetzt begutachten</string>
+
+    <string name="deactivate_account_title">Account deaktiveren</string>
+    <string name="deactivate_account_content">Dies wir deinen Account permanent unbenutzbar machen. Du wirst dich nicht anmelden können und keiner wird dieselbe Nutzer-ID erneut registrieren könne. Dieser Account wird alle Räume verlassen, in denen er ist und wird deine Account-Daten vom Identitätsserver löschen. <b>Diese Aktion ist irreversibel</b>.
+
+Den Account zu deaktiveren wird standardmäßig <b>keine deiner gesendeten Nachrichten löschen</b>. Wenn du von uns möchtest, dass wir auch deine Nachrichten löschen, wähle die Option unten aus.
+
+Die Sichtbarkeit deiner Nachrichten ist ähnlich zu E-Mails: Wenn wir deine Nachrichten löschen heißt das, dass sie nicht mit neuen oder nicht registrierten Nutzer geteilt werden, aber registrierte Nutzer, die bereits Zugang zu deinen Nachrichten haben, werden Zugriff auf ihre Kopie behalten.</string>
+    <string name="deactivate_account_delete_checkbox">Bitte löscht alle Nachrichten die ich gesendet habe, wenn mein Account deaktiviert wird (Warnung: Zukünftige Nutzer werden eine unvollständige Ansicht auf Konversationen haben)</string>
+    <string name="deactivate_account_prompt_password">Um fortzufahren, bitte Password eingeben:</string>
+    <string name="deactivate_account_submit">Account deaktivieren</string>
+
+<string name="dialog_title_third_party_licences">Drittanbieter-Lizenzen</string>
+
+    <string name="download">Download</string>
+    <string name="speak">Sprechen</string>
+    <string name="clear">Löschen</string>
+    <string name="e2e_re_request_encryption_key">Verschlüsselungsschlüssel von deinen anderen Geräten <u>erneut anfragen</u>.</string>
+
+    <string name="e2e_re_request_encryption_key_sent">Schlüsselanfrage gesendet.</string>
+
+    <string name="e2e_re_request_encryption_key_dialog_title">Anfrage gesendet</string>
+    <string name="e2e_re_request_encryption_key_dialog_content">Bitte öffne Riot auf einem anderen Gerät, das die Nachricht entschlüsseln kann, damit es diesem Gerät die Schlüssel senden kann.</string>
+
+    <string name="lock_screen_hint">Hier tippen…</string>
+
+    <string name="option_send_voice">Sende Sprache</string>
+
+    <string name="go_on_with">fortfahren mit…</string>
+    <string name="error_no_external_application_found">Es wurde keine externe Anwendung gefunden, um diese Aktion auszuführen.</string>
+
+    <string name="settings_labs_enable_send_voice">Sprachnachrichten (erfordert eine externe Anwendung um Sprachnachrichten aufzuzeichnen)</string>
+
+    <string name="error_empty_field_your_password">Bitte gebe dein Passwort ein.</string>
+
+</resources>

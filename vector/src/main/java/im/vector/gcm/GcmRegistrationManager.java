@@ -1,6 +1,7 @@
 /**
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,21 +29,15 @@ import android.os.Looper;
 import android.text.TextUtils;
 
 import org.matrix.androidsdk.HomeServerConnectionConfig;
-import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
-import org.matrix.androidsdk.rest.client.PushersRestClient;
-import org.matrix.androidsdk.util.Log;
-
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.data.Pusher;
 import org.matrix.androidsdk.listeners.IMXNetworkEventListener;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
+import org.matrix.androidsdk.rest.callback.SimpleApiCallback;
+import org.matrix.androidsdk.rest.client.PushersRestClient;
 import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.rest.model.PushersResponse;
-
-import im.vector.Matrix;
-import im.vector.R;
-import im.vector.activity.CommonActivityUtils;
-import im.vector.util.PreferencesManager;
+import org.matrix.androidsdk.util.Log;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +45,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+
+import im.vector.Matrix;
+import im.vector.R;
+import im.vector.activity.CommonActivityUtils;
+import im.vector.util.PreferencesManager;
 
 /**
  * Helper class to store the GCM registration ID in {@link SharedPreferences}
@@ -107,10 +107,10 @@ public final class GcmRegistrationManager {
     private String mPusherLang = null;
 
     // the session registration listener
-    private final ArrayList<ThirdPartyRegistrationListener> mThirdPartyRegistrationListeners = new ArrayList<>();
+    private final List<ThirdPartyRegistrationListener> mThirdPartyRegistrationListeners = new ArrayList<>();
 
     // the pushers list
-    public ArrayList<Pusher> mPushersList = new ArrayList<>();
+    public List<Pusher> mPushersList = new ArrayList<>();
 
     /**
      * Registration steps
@@ -349,7 +349,8 @@ public final class GcmRegistrationManager {
 
                     @Override
                     protected void onPostExecute(String pushKey) {
-                        mRegistrationState = setStoredRegistrationState(((pushKey != null) ? RegistrationState.GCM_REGISTRED : RegistrationState.UNREGISTRATED));
+                        mRegistrationState
+                                = setStoredRegistrationState(((pushKey != null) ? RegistrationState.GCM_REGISTRED : RegistrationState.UNREGISTRATED));
                         setStoredRegistrationToken(pushKey);
 
                         // warn the listener
@@ -593,7 +594,10 @@ public final class GcmRegistrationManager {
 
         Log.d(LOG_TAG, "registerToThirdPartyServer of " + session.getMyUserId());
 
-        boolean eventIdOnlyPushes = (isBackgroundSyncAllowed() ? true : !isContentSendingAllowed());
+        // send only the event id but not the event content if:
+        // - the user let the app run in background to fetch the event content from the homeserver
+        // - or, if the app cannot run in background, the user does not want to send event content to GCM
+        boolean eventIdOnlyPushes = isBackgroundSyncAllowed() || !isContentSendingAllowed();
 
         getPushersRestClient(session)
                 .addHttpPusher(mRegistrationToken, DEFAULT_PUSHER_APP_ID, computePushTag(session),
@@ -915,40 +919,47 @@ public final class GcmRegistrationManager {
      * @param callback the asynchronous callback
      */
     public void unregister(final MXSession session, final Pusher pusher, final ApiCallback<Void> callback) {
-        getPushersRestClient(session).removeHttpPusher(pusher.pushkey, pusher.appId, pusher.profileTag, pusher.lang, pusher.appDisplayName, pusher.deviceDisplayName, pusher.data.get("url"), new ApiCallback<Void>() {
-            @Override
-            public void onSuccess(Void info) {
-                mPushersRestClients.remove(session.getMyUserId());
-                refreshPushersList(new ArrayList<>(Matrix.getInstance(mContext).getSessions()), callback);
-            }
+        getPushersRestClient(session).removeHttpPusher(pusher.pushkey,
+                pusher.appId,
+                pusher.profileTag,
+                pusher.lang,
+                pusher.appDisplayName,
+                pusher.deviceDisplayName,
+                pusher.data.get("url"),
+                new ApiCallback<Void>() {
+                    @Override
+                    public void onSuccess(Void info) {
+                        mPushersRestClients.remove(session.getMyUserId());
+                        refreshPushersList(new ArrayList<>(Matrix.getInstance(mContext).getSessions()), callback);
+                    }
 
-            @Override
-            public void onNetworkError(Exception e) {
-                if (null != callback) {
-                    callback.onNetworkError(e);
-                }
-            }
+                    @Override
+                    public void onNetworkError(Exception e) {
+                        if (null != callback) {
+                            callback.onNetworkError(e);
+                        }
+                    }
 
-            @Override
-            public void onMatrixError(MatrixError e) {
-                if (e.mStatus == 404) {
-                    mPushersRestClients.remove(session.getMyUserId());
-                    // httpPusher is not available on server side anymore so assume the removal was successful
-                    onSuccess(null);
-                    return;
-                }
-                if (null != callback) {
-                    callback.onMatrixError(e);
-                }
-            }
+                    @Override
+                    public void onMatrixError(MatrixError e) {
+                        if (e.mStatus == 404) {
+                            mPushersRestClients.remove(session.getMyUserId());
+                            // httpPusher is not available on server side anymore so assume the removal was successful
+                            onSuccess(null);
+                            return;
+                        }
+                        if (null != callback) {
+                            callback.onMatrixError(e);
+                        }
+                    }
 
-            @Override
-            public void onUnexpectedError(Exception e) {
-                if (null != callback) {
-                    callback.onUnexpectedError(e);
-                }
-            }
-        });
+                    @Override
+                    public void onUnexpectedError(Exception e) {
+                        if (null != callback) {
+                            callback.onUnexpectedError(e);
+                        }
+                    }
+                });
     }
 
     /**
@@ -1038,7 +1049,9 @@ public final class GcmRegistrationManager {
      * Tell if GCM is registred i.e. ready to use
      */
     public boolean isGCMRegistred() {
-        return (mRegistrationState == RegistrationState.GCM_REGISTRED) || (mRegistrationState == RegistrationState.SERVER_REGISTRATING) || (mRegistrationState == RegistrationState.SERVER_REGISTERED);
+        return (mRegistrationState == RegistrationState.GCM_REGISTRED)
+                || (mRegistrationState == RegistrationState.SERVER_REGISTRATING)
+                || (mRegistrationState == RegistrationState.SERVER_REGISTERED);
     }
 
     /**
@@ -1060,10 +1073,44 @@ public final class GcmRegistrationManager {
     //================================================================================
 
     /**
+     * Notification privacy policies as displayed to the end user.
+     * In the code, this enumeration is currently implemented with combinations of booleans.
+     */
+    public enum NotificationPrivacy {
+        /**
+         * Reduced privacy: message metadata and content are sent through the push service.
+         * Notifications for messages in e2e rooms are displayed with low detail.
+         */
+        REDUCED,
+
+        /**
+         * Notifications are displayed with low detail (X messages in RoomY).
+         * Only message metadata is sent through the push service.
+         */
+        LOW_DETAIL,
+
+        /**
+         * Normal: full detailed notifications by keeping user privacy.
+         * Only message metadata is sent through the push service. The app then makes a sync in bg
+         * with the homeserver.
+         */
+        NORMAL
+
+        // Some hints for future usage
+        //UNKNOWN,              // the policy has not been set yet
+        //NO_NOTIFICATIONS,     // no notifications
+
+        // TODO: This enum could turn into an enum class with methods like isContentSendingAllowed()
+    }
+
+    /**
      * Clear the GCM preferences
      */
     public void clearPreferences() {
-        getGcmSharedPreferences().edit().clear().commit();
+        getGcmSharedPreferences()
+                .edit()
+                .clear()
+                .apply();
     }
 
     /**
@@ -1076,12 +1123,56 @@ public final class GcmRegistrationManager {
             mUseGCM = true;
 
             try {
-                mUseGCM = TextUtils.equals(mContext.getResources().getString(R.string.allow_gcm_use), "true");
+                mUseGCM = TextUtils.equals(mContext.getString(R.string.allow_gcm_use), "true");
             } catch (Exception e) {
                 Log.e(LOG_TAG, "useGCM " + e.getMessage());
             }
         }
         return mUseGCM;
+    }
+
+    /**
+     * @return the current notification privacy setting as displayed to the end user.
+     */
+    public NotificationPrivacy getNotificationPrivacy() {
+        NotificationPrivacy notificationPrivacy = NotificationPrivacy.LOW_DETAIL;
+
+        boolean isContentSendingAllowed = isContentSendingAllowed();
+        boolean isBackgroundSyncAllowed = isBackgroundSyncAllowed();
+
+        if (isContentSendingAllowed && !isBackgroundSyncAllowed) {
+            notificationPrivacy = NotificationPrivacy.REDUCED;
+        } else if (!isContentSendingAllowed && isBackgroundSyncAllowed) {
+            notificationPrivacy = NotificationPrivacy.NORMAL;
+        }
+
+        return notificationPrivacy;
+    }
+
+    /**
+     * Update the notification privacy setting.
+     * Translate the setting displayed to end user into internal booleans.
+     *
+     * @param notificationPrivacy the new notification privacy.
+     */
+    public void setNotificationPrivacy(NotificationPrivacy notificationPrivacy) {
+
+        switch (notificationPrivacy) {
+            case REDUCED:
+                setContentSendingAllowed(true);
+                setBackgroundSyncAllowed(false);
+                break;
+            case LOW_DETAIL:
+                setContentSendingAllowed(false);
+                setBackgroundSyncAllowed(false);
+                break;
+            case NORMAL:
+                setContentSendingAllowed(false);
+                setBackgroundSyncAllowed(true);
+                break;
+        }
+
+        forceSessionsRegistration(null);
     }
 
     /**
@@ -1097,11 +1188,10 @@ public final class GcmRegistrationManager {
      * @param areAllowed true to enable the device notifications.
      */
     public void setDeviceNotificationsAllowed(boolean areAllowed) {
-        if (!getGcmSharedPreferences().edit()
+        getGcmSharedPreferences()
+                .edit()
                 .putBoolean(PREFS_ALLOW_NOTIFICATIONS, areAllowed)
-                .commit()) {
-            Log.e(LOG_TAG, "## setDeviceNotificationsAllowed () : commit failed");
-        }
+                .apply();
 
         if (!useGCM()) {
             // when GCM is disabled, enable / disable the "Listen for events" notifications
@@ -1122,18 +1212,45 @@ public final class GcmRegistrationManager {
      * @param flag true to enable the device notifications.
      */
     public void setScreenTurnedOn(boolean flag) {
-        if (!getGcmSharedPreferences().edit()
+        getGcmSharedPreferences()
+                .edit()
                 .putBoolean(PREFS_TURN_SCREEN_ON, flag)
-                .commit()) {
-            Log.e(LOG_TAG, "## setScreenTurnedOn() : commit failed");
-        }
+                .apply();
     }
 
     /**
+     * Tell if the application can run in background.
+     * It depends on the app settings and the `IgnoringBatteryOptimizations` permission.
+     *
      * @return true if the background sync is allowed
      */
     public boolean isBackgroundSyncAllowed() {
+        // If using GCM, first check if the application has the "run in background" permission.
+        // No permission, no background sync
+        if (hasRegistrationToken()
+                && !PreferencesManager.isIgnoringBatteryOptimizations(mContext)) {
+            return false;
+        }
+
+        // then, this depends on the user setting
         return getGcmSharedPreferences().getBoolean(PREFS_ALLOW_BACKGROUND_SYNC, true);
+    }
+
+    /**
+     * Allow the background sync.
+     * Background sync (isBackgroundSyncAllowed) is really enabled if the "isIgnoringBatteryOptimizations"
+     * permission has been granted.
+     *
+     * @param isAllowed true to allow the background sync.
+     */
+    public void setBackgroundSyncAllowed(boolean isAllowed) {
+        getGcmSharedPreferences()
+                .edit()
+                .putBoolean(PREFS_ALLOW_BACKGROUND_SYNC, isAllowed)
+                .apply();
+
+        // when GCM is disabled, enable / disable the "Listen for events" notifications
+        CommonActivityUtils.onGcmUpdate(mContext);
     }
 
     /**
@@ -1143,22 +1260,6 @@ public final class GcmRegistrationManager {
      */
     public boolean canStartAppInBackground() {
         return isBackgroundSyncAllowed() || (null != getStoredRegistrationToken());
-    }
-
-    /**
-     * Allow the background sync
-     *
-     * @param isAllowed true to allow the background sync.
-     */
-    public void setBackgroundSyncAllowed(boolean isAllowed) {
-        if (!getGcmSharedPreferences().edit()
-                .putBoolean(PREFS_ALLOW_BACKGROUND_SYNC, isAllowed)
-                .commit()) {
-            Log.e(LOG_TAG, "## setBackgroundSyncAllowed() : commit failed");
-        }
-
-        // when GCM is disabled, enable / disable the "Listen for events" notifications
-        CommonActivityUtils.onGcmUpdate(mContext);
     }
 
     /**
@@ -1174,11 +1275,10 @@ public final class GcmRegistrationManager {
      * @param isAllowed true to allow the content sending.
      */
     public void setContentSendingAllowed(boolean isAllowed) {
-        if (!getGcmSharedPreferences().edit()
+        getGcmSharedPreferences()
+                .edit()
                 .putBoolean(PREFS_ALLOW_SENDING_CONTENT_TO_GCM, isAllowed)
-                .commit()) {
-            Log.e(LOG_TAG, "## setContentSendingAllowed() : commit failed");
-        }
+                .apply();
     }
 
     /**
@@ -1192,11 +1292,10 @@ public final class GcmRegistrationManager {
      * @param syncDelay the new sync delay in ms.
      */
     public void setBackgroundSyncTimeOut(int syncDelay) {
-        if (!getGcmSharedPreferences().edit()
+        getGcmSharedPreferences()
+                .edit()
                 .putInt(PREFS_SYNC_TIMEOUT, syncDelay)
-                .commit()) {
-            Log.e(LOG_TAG, "## setBackgroundSyncTimeOut() : commit failed");
-        }
+                .apply();
     }
 
     /**
@@ -1228,11 +1327,10 @@ public final class GcmRegistrationManager {
             syncDelay = Math.max(syncDelay, 1000);
         }
 
-        if (!getGcmSharedPreferences().edit()
+        getGcmSharedPreferences()
+                .edit()
                 .putInt(PREFS_SYNC_DELAY, syncDelay)
-                .commit()) {
-            Log.e(LOG_TAG, "## setBackgroundSyncDelay() : commit failed");
-        }
+                .apply();
     }
 
     //================================================================================
@@ -1265,11 +1363,11 @@ public final class GcmRegistrationManager {
      */
     private void clearOldStoredRegistrationToken() {
         Log.d(LOG_TAG, "Remove old registration token");
-        if (!getGcmSharedPreferences().edit()
+
+        getGcmSharedPreferences()
+                .edit()
                 .remove(PREFS_PUSHER_REGISTRATION_TOKEN_KEY)
-                .commit()) {
-            Log.e(LOG_TAG, "## setStoredRegistrationToken() : commit failed");
-        }
+                .apply();
     }
 
     /**
@@ -1280,11 +1378,10 @@ public final class GcmRegistrationManager {
     private void setStoredRegistrationToken(String registrationToken) {
         Log.d(LOG_TAG, "Saving registration token");
 
-        if (!getGcmSharedPreferences().edit()
+        getGcmSharedPreferences()
+                .edit()
                 .putString(PREFS_PUSHER_REGISTRATION_TOKEN_KEY_FCM, registrationToken)
-                .commit()) {
-            Log.e(LOG_TAG, "## setStoredRegistrationToken() : commit failed");
-        }
+                .apply();
     }
 
     /**
@@ -1306,11 +1403,10 @@ public final class GcmRegistrationManager {
                 (RegistrationState.SERVER_REGISTRATING != state) &&
                 (RegistrationState.SERVER_UNREGISTRATING != state)) {
 
-            if (!getGcmSharedPreferences().edit()
+            getGcmSharedPreferences()
+                    .edit()
                     .putInt(PREFS_PUSHER_REGISTRATION_STATUS, state.ordinal())
-                    .commit()) {
-                Log.e(LOG_TAG, "## setStoredRegistrationState() : commit failed");
-            }
+                    .apply();
         }
 
         return state;

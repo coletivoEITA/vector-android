@@ -1,5 +1,6 @@
 /*
  * Copyright 2014 OpenMarket Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@ package im.vector.activity;
 
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Bundle;
 import android.support.v4.view.ViewPager;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -44,7 +44,6 @@ import im.vector.VectorApp;
 import im.vector.adapters.VectorMediasViewerAdapter;
 import im.vector.db.VectorContentProvider;
 import im.vector.util.SlidableMediaInfo;
-import im.vector.util.ThemeUtils;
 
 /**
  * Display a medias list.
@@ -71,8 +70,6 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
 
     // the medias list
     private List<SlidableMediaInfo> mMediasList;
-
-    private MenuItem mShareMenuItem;
 
     // the slide effect
     public class DepthPageTransformer implements ViewPager.PageTransformer {
@@ -113,9 +110,12 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public int getLayoutRes() {
+        return R.layout.activity_vector_medias_viewer;
+    }
 
+    @Override
+    public void initUiAndData() {
         if (CommonActivityUtils.shouldRestartApp(this)) {
             Log.d(LOG_TAG, "onCreate : restart the application");
             CommonActivityUtils.restartApp(this);
@@ -148,7 +148,6 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
             return;
         }
 
-        setContentView(R.layout.activity_vector_medias_viewer);
         mViewPager = findViewById(R.id.view_pager);
 
         int position = Math.min(intent.getIntExtra(KEY_INFO_LIST_INDEX, 0), mMediasList.size() - 1);
@@ -161,8 +160,8 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
         mAdapter.autoPlayItemAt(position);
         mViewPager.setCurrentItem(position);
 
-        if (null != VectorMediasViewerActivity.this.getSupportActionBar()) {
-            VectorMediasViewerActivity.this.getSupportActionBar().setTitle(mMediasList.get(position).mFileName);
+        if (null != getSupportActionBar()) {
+            getSupportActionBar().setTitle(mMediasList.get(position).mFileName);
         }
         mViewPager.addOnPageChangeListener(new ViewPager.OnPageChangeListener() {
             @Override
@@ -172,14 +171,12 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
 
             @Override
             public void onPageSelected(int position) {
-                if (null != VectorMediasViewerActivity.this.getSupportActionBar()) {
-                    VectorMediasViewerActivity.this.getSupportActionBar().setTitle(mMediasList.get(position).mFileName);
+                if (null != getSupportActionBar()) {
+                    getSupportActionBar().setTitle(mMediasList.get(position).mFileName);
                 }
 
                 // disable shared for encrypted files as they are saved in a tmp folder
-                if (null != mShareMenuItem) {
-                    mShareMenuItem.setVisible(null == mMediasList.get(position).mEncryptedFileInfo);
-                }
+                supportInvalidateOptionsMenu();
             }
 
             @Override
@@ -198,19 +195,21 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
+    public int getMenuRes() {
+        return R.menu.vector_medias_viewer;
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
         // the application is in a weird state
         if (CommonActivityUtils.shouldRestartApp(this)) {
             return false;
         }
 
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.vector_medias_viewer, menu);
-        CommonActivityUtils.tintMenuIcons(menu, ThemeUtils.getColor(this, R.attr.icon_tint_on_dark_action_bar_color));
-
-        mShareMenuItem = menu.findItem(R.id.ic_action_share);
-        if (null != mShareMenuItem) {
-            mShareMenuItem.setVisible(null == mMediasList.get(mViewPager.getCurrentItem()).mEncryptedFileInfo);
+        MenuItem shareMenuItem = menu.findItem(R.id.ic_action_share);
+        if (null != shareMenuItem) {
+            // disable shared for encrypted files as they are saved in a tmp folder
+            shareMenuItem.setVisible(null == mMediasList.get(mViewPager.getCurrentItem()).mEncryptedFileInfo);
         }
 
         return true;
@@ -234,12 +233,13 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
                     }
 
                     if (action == R.id.ic_action_download) {
-                        CommonActivityUtils.saveMediaIntoDownloads(VectorMediasViewerActivity.this, file, mediaInfo.mFileName, mediaInfo.mMimeType, new SimpleApiCallback<String>() {
-                            @Override
-                            public void onSuccess(String savedMediaPath) {
-                                Toast.makeText(VectorApp.getInstance(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
-                            }
-                        });
+                        CommonActivityUtils.saveMediaIntoDownloads(VectorMediasViewerActivity.this,
+                                file, mediaInfo.mFileName, mediaInfo.mMimeType, new SimpleApiCallback<String>() {
+                                    @Override
+                                    public void onSuccess(String savedMediaPath) {
+                                        Toast.makeText(VectorApp.getInstance(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
+                                    }
+                                });
                     } else {
                         if (null != mediaInfo.mFileName) {
                             File dstFile = new File(file.getParent(), mediaInfo.mFileName);
@@ -269,7 +269,7 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
                                 startActivity(sendIntent);
                             } catch (Exception e) {
                                 Log.e(LOG_TAG, "## onAction : cannot display the media " + mediaUri + " mimeType " + mediaInfo.mMimeType);
-                                CommonActivityUtils.displayToast(VectorMediasViewerActivity.this, e.getLocalizedMessage());
+                                Toast.makeText(VectorMediasViewerActivity.this, e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
                             }
                         }
                     }
@@ -277,7 +277,8 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
             });
         } else {
             // else download it
-            final String downloadId = mediasCache.downloadMedia(this, mSession.getHomeServerConfig(), mediaInfo.mMediaUrl, mediaInfo.mMimeType, mediaInfo.mEncryptedFileInfo);
+            final String downloadId = mediasCache.downloadMedia(this,
+                    mSession.getHomeServerConfig(), mediaInfo.mMediaUrl, mediaInfo.mMimeType, mediaInfo.mEncryptedFileInfo);
 
             if (null != downloadId) {
                 mediasCache.addDownloadListener(downloadId, new MXMediaDownloadListener() {
@@ -304,15 +305,10 @@ public class VectorMediasViewerActivity extends MXCActionBarActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-
         switch (item.getItemId()) {
-            case android.R.id.home:
-                finish();
-                return true;
             case R.id.ic_action_share:
             case R.id.ic_action_download:
-                onAction(mViewPager.getCurrentItem(), id);
+                onAction(mViewPager.getCurrentItem(), item.getItemId());
                 return true;
         }
 

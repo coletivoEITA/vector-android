@@ -1,5 +1,6 @@
 /*
  * Copyright 2014 OpenMarket Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +24,6 @@ import android.support.design.widget.TabLayout;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.ActionBar;
 import android.text.TextUtils;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ProgressBar;
@@ -41,7 +41,6 @@ import java.util.List;
 import im.vector.Matrix;
 import im.vector.R;
 import im.vector.adapters.GroupDetailsFragmentPagerAdapter;
-import im.vector.fragments.GroupDetailsBaseFragment;
 import im.vector.util.ThemeUtils;
 import im.vector.view.RiotViewPager;
 
@@ -61,7 +60,6 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
     private Group mGroup;
 
     // UI views
-    private View mLoadingView;
     private ProgressBar mGroupSyncInProgress;
 
     private RiotViewPager mPager;
@@ -77,7 +75,7 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
         @Override
         public void onLeaveGroup(String groupId) {
             if ((null != mRoom) && TextUtils.equals(groupId, mGroup.getGroupId())) {
-                VectorGroupDetailsActivity.this.finish();
+                finish();
             }
         }
 
@@ -134,9 +132,12 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
     };
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public int getLayoutRes() {
+        return R.layout.activity_vector_group_details;
+    }
 
+    @Override
+    public void initUiAndData() {
         if (CommonActivityUtils.shouldRestartApp(this)) {
             Log.e(LOG_TAG, "Restart the application.");
             CommonActivityUtils.restartApp(this);
@@ -183,10 +184,8 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
             Log.d(LOG_TAG, "## onCreate() : displaying " + groupId);
         }
 
-        setContentView(R.layout.activity_vector_group_details);
-
         // UI widgets binding & init fields
-        mLoadingView = findViewById(R.id.group_loading_layout);
+        setWaitingView(findViewById(R.id.group_loading_layout));
 
         // tab creation and restore tabs UI context
         ActionBar actionBar = getSupportActionBar();
@@ -203,12 +202,12 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
         mPager.setAdapter(mPagerAdapter);
 
         TabLayout layout = findViewById(R.id.group_tabs);
-        ThemeUtils.setTabLayoutTheme(this, layout);
+        ThemeUtils.INSTANCE.setTabLayoutTheme(this, layout);
 
         if (intent.hasExtra(EXTRA_TAB_INDEX)) {
             mPager.setCurrentItem(getIntent().getIntExtra(EXTRA_TAB_INDEX, 0));
         } else {
-            mPager.setCurrentItem((null != savedInstanceState) ? savedInstanceState.getInt(EXTRA_TAB_INDEX, 0) : 0);
+            mPager.setCurrentItem(isFirstCreation() ? 0 : getSavedInstanceState().getInt(EXTRA_TAB_INDEX, 0));
         }
         layout.setupWithViewPager(mPager);
 
@@ -260,16 +259,6 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case android.R.id.home:
-                finish();
-                return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
     protected void onPause() {
         super.onPause();
         mSession.getDataHandler().removeListener(mGroupEventsListener);
@@ -280,24 +269,6 @@ public class VectorGroupDetailsActivity extends MXCActionBarActivity {
         super.onResume();
         refreshGroupInfo();
         mSession.getDataHandler().addListener(mGroupEventsListener);
-    }
-
-    /**
-     * SHow the waiting view
-     */
-    public void showWaitingView() {
-        if (null != mLoadingView) {
-            mLoadingView.setVisibility(View.VISIBLE);
-        }
-    }
-
-    /**
-     * Hide the waiting view
-     */
-    public void stopWaitingView() {
-        if (null != mLoadingView) {
-            mLoadingView.setVisibility(View.GONE);
-        }
     }
 
     /**

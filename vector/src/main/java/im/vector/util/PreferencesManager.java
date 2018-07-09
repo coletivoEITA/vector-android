@@ -1,7 +1,8 @@
 /*
  * Copyright 2016 OpenMarket Ltd
  * Copyright 2017 Vector Creations Ltd
- * 
+ * Copyright 2018 New Vector Ltd
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -37,11 +38,13 @@ import java.util.List;
 import java.util.Set;
 
 import im.vector.R;
-import im.vector.activity.LoginActivity;
+import im.vector.repositories.ServerUrlsRepository;
 
 public class PreferencesManager {
 
     private static final String LOG_TAG = PreferencesManager.class.getSimpleName();
+
+    public static final String VERSION_BUILD = "VERSION_BUILD";
 
     public static final String SETTINGS_MESSAGES_SENT_BY_BOT_PREFERENCE_KEY = "SETTINGS_MESSAGES_SENT_BY_BOT_PREFERENCE_KEY_2";
     public static final String SETTINGS_CHANGE_PASSWORD_PREFERENCE_KEY = "SETTINGS_CHANGE_PASSWORD_PREFERENCE_KEY";
@@ -52,12 +55,12 @@ public class PreferencesManager {
     public static final String SETTINGS_IDENTITY_SERVER_PREFERENCE_KEY = "SETTINGS_IDENTITY_SERVER_PREFERENCE_KEY";
     public static final String SETTINGS_APP_TERM_CONDITIONS_PREFERENCE_KEY = "SETTINGS_APP_TERM_CONDITIONS_PREFERENCE_KEY";
     public static final String SETTINGS_PRIVACY_POLICY_PREFERENCE_KEY = "SETTINGS_PRIVACY_POLICY_PREFERENCE_KEY";
+    public static final String SETTINGS_NOTIFICATION_PRIVACY_PREFERENCE_KEY = "SETTINGS_NOTIFICATION_PRIVACY_PREFERENCE_KEY";
     public static final String SETTINGS_THIRD_PARTY_NOTICES_PREFERENCE_KEY = "SETTINGS_THIRD_PARTY_NOTICES_PREFERENCE_KEY";
     public static final String SETTINGS_COPYRIGHT_PREFERENCE_KEY = "SETTINGS_COPYRIGHT_PREFERENCE_KEY";
     public static final String SETTINGS_CLEAR_CACHE_PREFERENCE_KEY = "SETTINGS_CLEAR_CACHE_PREFERENCE_KEY";
     public static final String SETTINGS_CLEAR_MEDIA_CACHE_PREFERENCE_KEY = "SETTINGS_CLEAR_MEDIA_CACHE_PREFERENCE_KEY";
     public static final String SETTINGS_ENABLE_BACKGROUND_SYNC_PREFERENCE_KEY = "SETTINGS_ENABLE_BACKGROUND_SYNC_PREFERENCE_KEY";
-    public static final String SETTINGS_ENABLE_CONTENT_SENDING_PREFERENCE_KEY = "SETTINGS_ENABLE_CONTENT_SENDING_PREFERENCE_KEY";
     public static final String SETTINGS_OTHERS_PREFERENCE_KEY = "SETTINGS_OTHERS_PREFERENCE_KEY";
     public static final String SETTINGS_USER_SETTINGS_PREFERENCE_KEY = "SETTINGS_USER_SETTINGS_PREFERENCE_KEY";
     public static final String SETTINGS_CONTACT_PREFERENCE_KEYS = "SETTINGS_CONTACT_PREFERENCE_KEYS";
@@ -73,11 +76,13 @@ public class PreferencesManager {
     public static final String SETTINGS_SET_SYNC_TIMEOUT_PREFERENCE_KEY = "SETTINGS_SET_SYNC_TIMEOUT_PREFERENCE_KEY";
     public static final String SETTINGS_SET_SYNC_DELAY_PREFERENCE_KEY = "SETTINGS_SET_SYNC_DELAY_PREFERENCE_KEY";
     public static final String SETTINGS_ROOM_SETTINGS_LABS_END_TO_END_PREFERENCE_KEY = "SETTINGS_ROOM_SETTINGS_LABS_END_TO_END_PREFERENCE_KEY";
-    public static final String SETTINGS_ROOM_SETTINGS_LABS_END_TO_END_IS_ACTIVE_PREFERENCE_KEY = "SETTINGS_ROOM_SETTINGS_LABS_END_TO_END_IS_ACTIVE_PREFERENCE_KEY";
+    public static final String SETTINGS_ROOM_SETTINGS_LABS_END_TO_END_IS_ACTIVE_PREFERENCE_KEY
+            = "SETTINGS_ROOM_SETTINGS_LABS_END_TO_END_IS_ACTIVE_PREFERENCE_KEY";
     public static final String SETTINGS_PROFILE_PICTURE_PREFERENCE_KEY = "SETTINGS_PROFILE_PICTURE_PREFERENCE_KEY";
     public static final String SETTINGS_CONTACTS_PHONEBOOK_COUNTRY_PREFERENCE_KEY = "SETTINGS_CONTACTS_PHONEBOOK_COUNTRY_PREFERENCE_KEY";
     public static final String SETTINGS_INTERFACE_LANGUAGE_PREFERENCE_KEY = "SETTINGS_INTERFACE_LANGUAGE_PREFERENCE_KEY";
     public static final String SETTINGS_BACKGROUND_SYNC_PREFERENCE_KEY = "SETTINGS_BACKGROUND_SYNC_PREFERENCE_KEY";
+    public static final String SETTINGS_BACKGROUND_SYNC_DIVIDER_PREFERENCE_KEY = "SETTINGS_BACKGROUND_SYNC_DIVIDER_PREFERENCE_KEY";
     public static final String SETTINGS_ENCRYPTION_INFORMATION_DEVICE_NAME_PREFERENCE_KEY = "SETTINGS_ENCRYPTION_INFORMATION_DEVICE_NAME_PREFERENCE_KEY";
     public static final String SETTINGS_ENCRYPTION_INFORMATION_DEVICE_ID_PREFERENCE_KEY = "SETTINGS_ENCRYPTION_INFORMATION_DEVICE_ID_PREFERENCE_KEY";
     public static final String SETTINGS_ENCRYPTION_EXPORT_E2E_ROOM_KEYS_PREFERENCE_KEY = "SETTINGS_ENCRYPTION_EXPORT_E2E_ROOM_KEYS_PREFERENCE_KEY";
@@ -86,6 +91,7 @@ public class PreferencesManager {
     public static final String SETTINGS_ENCRYPTION_INFORMATION_DEVICE_KEY_PREFERENCE_KEY = "SETTINGS_ENCRYPTION_INFORMATION_DEVICE_KEY_PREFERENCE_KEY";
 
     public static final String SETTINGS_DISPLAY_NAME_PREFERENCE_KEY = "SETTINGS_DISPLAY_NAME_PREFERENCE_KEY";
+    public static final String SETTINGS_NOTIFICATIONS_KEY = "SETTINGS_NOTIFICATIONS_KEY";
     public static final String SETTINGS_ENABLE_ALL_NOTIF_PREFERENCE_KEY = "SETTINGS_ENABLE_ALL_NOTIF_PREFERENCE_KEY";
     public static final String SETTINGS_ENABLE_THIS_DEVICE_PREFERENCE_KEY = "SETTINGS_ENABLE_THIS_DEVICE_PREFERENCE_KEY";
     public static final String SETTINGS_TURN_SCREEN_ON_PREFERENCE_KEY = "SETTINGS_TURN_SCREEN_ON_PREFERENCE_KEY";
@@ -109,14 +115,12 @@ public class PreferencesManager {
 
     private static final String SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY = "SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY";
     private static final String SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY = "SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY";
-    private static final String SETTINGS_DISABLE_PIWIK_SETTINGS_PREFERENCE_KEY = "SETTINGS_DISABLE_PIWIK_SETTINGS_PREFERENCE_KEY";
 
     public static final String SETTINGS_DATA_SAVE_MODE_PREFERENCE_KEY = "SETTINGS_DATA_SAVE_MODE_PREFERENCE_KEY";
     public static final String SETTINGS_START_ON_BOOT_PREFERENCE_KEY = "SETTINGS_START_ON_BOOT_PREFERENCE_KEY";
     public static final String SETTINGS_INTERFACE_TEXT_SIZE_KEY = "SETTINGS_INTERFACE_TEXT_SIZE_KEY";
 
     private static final String SETTINGS_USE_JITSI_CONF_PREFERENCE_KEY = "SETTINGS_USE_JITSI_CONF_PREFERENCE_KEY";
-    private static final String SETTINGS_USE_MATRIX_APPS_PREFERENCE_KEY = "SETTINGS_USE_MATRIX_APPS_PREFERENCE_KEY";
 
     private static final String SETTINGS_NOTIFICATION_RINGTONE_PREFERENCE_KEY = "SETTINGS_NOTIFICATION_RINGTONE_PREFERENCE_KEY";
     public static final String SETTINGS_NOTIFICATION_RINGTONE_SELECTION_PREFERENCE_KEY = "SETTINGS_NOTIFICATION_RINGTONE_SELECTION_PREFERENCE_KEY";
@@ -125,13 +129,23 @@ public class PreferencesManager {
 
     private static final String SETTINGS_USE_NATIVE_CAMERA_PREFERENCE_KEY = "SETTINGS_USE_NATIVE_CAMERA_PREFERENCE_KEY";
 
+    private static final String SETTINGS_ENABLE_SEND_VOICE_FEATURE_PREFERENCE_KEY = "SETTINGS_ENABLE_SEND_VOICE_FEATURE_PREFERENCE_KEY";
+
     public static final String SETTINGS_SHOW_URL_PREVIEW_KEY = "SETTINGS_SHOW_URL_PREVIEW_KEY";
 
     private static final String SETTINGS_VIBRATE_ON_MENTION_KEY = "SETTINGS_VIBRATE_ON_MENTION_KEY";
 
+    // Analytics keys (Piwik, Matomo, etc.)
+    public static final String SETTINGS_USE_ANALYTICS_KEY = "SETTINGS_USE_ANALYTICS_KEY";
+
     public static final String SETTINGS_USE_RAGE_SHAKE_KEY = "SETTINGS_USE_RAGE_SHAKE_KEY";
 
     private static final String SETTINGS_DISPLAY_ALL_EVENTS_KEY = "SETTINGS_DISPLAY_ALL_EVENTS_KEY";
+
+    private static final String DID_ASK_TO_IGNORE_BATTERY_OPTIMIZATIONS_KEY = "DID_ASK_TO_IGNORE_BATTERY_OPTIMIZATIONS_KEY";
+    private static final String DID_ASK_TO_USE_ANALYTICS_TRACKING_KEY = "DID_ASK_TO_USE_ANALYTICS_TRACKING_KEY";
+
+    public static final String SETTINGS_DEACTIVATE_ACCOUNT_KEY = "SETTINGS_DEACTIVATE_ACCOUNT_KEY";
 
     private static final int MEDIA_SAVING_3_DAYS = 0;
     private static final int MEDIA_SAVING_1_WEEK = 1;
@@ -155,7 +169,6 @@ public class PreferencesManager {
             SETTINGS_START_ON_BOOT_PREFERENCE_KEY,
             SETTINGS_INTERFACE_TEXT_SIZE_KEY,
             SETTINGS_USE_JITSI_CONF_PREFERENCE_KEY,
-            SETTINGS_USE_MATRIX_APPS_PREFERENCE_KEY,
             SETTINGS_NOTIFICATION_RINGTONE_PREFERENCE_KEY,
             SETTINGS_NOTIFICATION_RINGTONE_SELECTION_PREFERENCE_KEY,
 
@@ -180,9 +193,9 @@ public class PreferencesManager {
     public static void clearPreferences(Context context) {
         Set<String> keysToKeep = new HashSet<>(mKeysToKeepAfterLogout);
 
-        // home server url
-        keysToKeep.add(LoginActivity.HOME_SERVER_URL_PREF);
-        keysToKeep.add(LoginActivity.IDENTITY_SERVER_URL_PREF);
+        // home server urls
+        keysToKeep.add(ServerUrlsRepository.HOME_SERVER_URL_PREF);
+        keysToKeep.add(ServerUrlsRepository.IDENTITY_SERVER_URL_PREF);
 
         // theme
         keysToKeep.add(ThemeUtils.APPLICATION_THEME_KEY);
@@ -200,22 +213,49 @@ public class PreferencesManager {
             editor.remove(key);
         }
 
-        editor.commit();
+        editor.apply();
     }
 
     /**
-     * Tells if the battery optimisations are ignored for this application.
+     * Tells if we have already asked the user to disable battery optimisations on android >= M devices.
      *
      * @param context the context
-     * @return true if the battery optimisations are ignored.
+     * @return true if it was already requested
+     */
+    public static boolean didAskUserToIgnoreBatteryOptimizations(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(DID_ASK_TO_IGNORE_BATTERY_OPTIMIZATIONS_KEY, false);
+    }
+
+    /**
+     * Mark as requested the question to disable battery optimisations.
+     *
+     * @param context the context
+     */
+    public static void setDidAskUserToIgnoreBatteryOptimizations(Context context, boolean asked) {
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(DID_ASK_TO_IGNORE_BATTERY_OPTIMIZATIONS_KEY, asked)
+                .apply();
+    }
+
+    /**
+     * Tells if the application ignores battery optimizations.
+     * <p>
+     * Ignoring them allows the app to run in background to make background sync with the homeserver.
+     * This user option appears on Android M but Android O enforces its usage and kills apps not
+     * authorised by the user to run in background.
+     *
+     * @param context the context
+     * @return true if battery optimisations are ignored
      */
     @SuppressLint("NewApi")
-    public static boolean useBatteryOptimisation(Context context) {
+    public static boolean isIgnoringBatteryOptimizations(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return !((PowerManager) context.getSystemService(context.POWER_SERVICE)).isIgnoringBatteryOptimizations(context.getPackageName());
+            return ((PowerManager) context.getSystemService(context.POWER_SERVICE)).isIgnoringBatteryOptimizations(context.getPackageName());
         }
 
-        return false;
+        // no issue before Android M, battery optimisations did not exist
+        return true;
     }
 
     /**
@@ -259,14 +299,23 @@ public class PreferencesManager {
     }
 
     /**
+     * Tells if the send voice feature is enabled.
+     *
+     * @param context the context
+     * @return true if the send voice feature is enabled.
+     */
+    public static boolean isSendVoiceFeatureEnabled(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_ENABLE_SEND_VOICE_FEATURE_PREFERENCE_KEY, false);
+    }
+
+    /**
      * Update the notification ringtone
      *
      * @param context the context
      * @param uri     the new notification ringtone
      */
     public static void setNotificationRingTone(Context context, Uri uri) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = preferences.edit();
+        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(context).edit();
 
         String value = "";
 
@@ -282,7 +331,7 @@ public class PreferencesManager {
         }
 
         editor.putString(SETTINGS_NOTIFICATION_RINGTONE_PREFERENCE_KEY, value);
-        editor.commit();
+        editor.apply();
     }
 
     /**
@@ -379,16 +428,6 @@ public class PreferencesManager {
     }
 
     /**
-     * Tells if the matrix apps are supported.
-     *
-     * @param context the context
-     * @return true if the matrix apps are supported.
-     */
-    public static boolean useMatrixApps(Context context) {
-        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_USE_MATRIX_APPS_PREFERENCE_KEY, true);
-    }
-
-    /**
      * Tells if the application is started on boot
      *
      * @param context the context
@@ -405,10 +444,10 @@ public class PreferencesManager {
      * @param value   true to start the application on boot
      */
     public static void setAutoStartOnBoot(Context context, boolean value) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putBoolean(SETTINGS_START_ON_BOOT_PREFERENCE_KEY, value);
-        editor.commit();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(SETTINGS_START_ON_BOOT_PREFERENCE_KEY, value)
+                .apply();
     }
 
     /**
@@ -442,10 +481,10 @@ public class PreferencesManager {
      * @param index   the selected period index
      */
     public static void setSelectedMediasSavingPeriod(Context context, int index) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putInt(SETTINGS_MEDIA_SAVING_PERIOD_SELECTED_KEY, index);
-        editor.commit();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putInt(SETTINGS_MEDIA_SAVING_PERIOD_SELECTED_KEY, index)
+                .apply();
     }
 
     /**
@@ -501,48 +540,26 @@ public class PreferencesManager {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
 
         if (preferences.contains(context.getString(R.string.settings_pin_missed_notifications))) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY, preferences.getBoolean(context.getString(R.string.settings_pin_missed_notifications), false));
-            editor.remove(context.getString(R.string.settings_pin_missed_notifications));
-            editor.commit();
+            preferences.edit()
+                    .putBoolean(SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY,
+                            preferences.getBoolean(context.getString(R.string.settings_pin_missed_notifications), false))
+                    .remove(context.getString(R.string.settings_pin_missed_notifications))
+                    .apply();
         }
 
         if (preferences.contains(context.getString(R.string.settings_pin_unread_messages))) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY, preferences.getBoolean(context.getString(R.string.settings_pin_unread_messages), false));
-            editor.remove(context.getString(R.string.settings_pin_unread_messages));
-            editor.commit();
+            preferences.edit()
+                    .putBoolean(SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY,
+                            preferences.getBoolean(context.getString(R.string.settings_pin_unread_messages), false))
+                    .remove(context.getString(R.string.settings_pin_unread_messages))
+                    .apply();
         }
 
         if (preferences.contains("MARKDOWN_PREFERENCE_KEY")) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_DISABLE_MARKDOWN_KEY, !preferences.getBoolean("MARKDOWN_PREFERENCE_KEY", false));
-            editor.remove("MARKDOWN_PREFERENCE_KEY");
-            editor.commit();
-        }
-
-        if (!preferences.contains(SETTINGS_USE_JITSI_CONF_PREFERENCE_KEY)) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_USE_JITSI_CONF_PREFERENCE_KEY, true);
-            editor.commit();
-        }
-
-        if (!preferences.contains(SETTINGS_USE_MATRIX_APPS_PREFERENCE_KEY)) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_USE_MATRIX_APPS_PREFERENCE_KEY, true);
-            editor.commit();
-        }
-
-        if (!preferences.contains(SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY)) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY, true);
-            editor.commit();
-        }
-
-        if (!preferences.contains(SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY)) {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean(SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY, true);
-            editor.commit();
+            preferences.edit()
+                    .putBoolean(SETTINGS_DISABLE_MARKDOWN_KEY, !preferences.getBoolean("MARKDOWN_PREFERENCE_KEY", false))
+                    .remove("MARKDOWN_PREFERENCE_KEY")
+                    .apply();
         }
     }
 
@@ -563,10 +580,10 @@ public class PreferencesManager {
      * @param isEnabled true to enable the markdown
      */
     public static void setMarkdownEnabled(Context context, boolean isEnabled) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putBoolean(SETTINGS_DISABLE_MARKDOWN_KEY, !isEnabled);
-        editor.commit();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(SETTINGS_DISABLE_MARKDOWN_KEY, !isEnabled)
+                .apply();
     }
 
     /**
@@ -606,7 +623,7 @@ public class PreferencesManager {
      * @return true to move the missed notifications to the left side
      */
     public static boolean pinMissedNotifications(Context context) {
-        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY, false);
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY, true);
     }
 
     /**
@@ -616,17 +633,7 @@ public class PreferencesManager {
      * @return true to move the unread room to the left side
      */
     public static boolean pinUnreadMessages(Context context) {
-        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY, false);
-    }
-
-    /**
-     * Tells if Piwik can be used
-     *
-     * @param context the context
-     * @return true to use it
-     */
-    public static boolean trackWithPiwik(Context context) {
-        return !PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_DISABLE_PIWIK_SETTINGS_PREFERENCE_KEY, false);
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY, true);
     }
 
     /**
@@ -637,6 +644,51 @@ public class PreferencesManager {
      */
     public static boolean vibrateWhenMentioning(Context context) {
         return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_VIBRATE_ON_MENTION_KEY, false);
+    }
+
+    /**
+     * Tells if a dialog has been displayed to ask to use the analytics tracking (piwik, matomo, etc.).
+     *
+     * @param context the context
+     * @return true if a dialog has been displayed to ask to use the analytics tracking
+     */
+    public static boolean didAskToUseAnalytics(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(DID_ASK_TO_USE_ANALYTICS_TRACKING_KEY, false);
+    }
+
+    /**
+     * To call if the user has been asked for analytics tracking.
+     *
+     * @param context the context
+     */
+    public static void setDidAskToUseAnalytics(Context context) {
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(DID_ASK_TO_USE_ANALYTICS_TRACKING_KEY, true)
+                .apply();
+    }
+
+    /**
+     * Tells if the analytics tracking is authorized (piwik, matomo, etc.).
+     *
+     * @param context the context
+     * @return true if the analytics tracking is authorized
+     */
+    public static boolean useAnalytics(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_USE_ANALYTICS_KEY, false);
+    }
+
+    /**
+     * Enable or disable the analytics tracking.
+     *
+     * @param context      the context
+     * @param useAnalytics true to enable the analytics tracking
+     */
+    public static void setUseAnalytics(Context context, boolean useAnalytics) {
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(SETTINGS_USE_ANALYTICS_KEY, useAnalytics)
+                .apply();
     }
 
     /**
@@ -656,10 +708,10 @@ public class PreferencesManager {
      * @param isEnabled true to enable the rage shake
      */
     public static void setUseRageshake(Context context, boolean isEnabled) {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putBoolean(SETTINGS_USE_RAGE_SHAKE_KEY, isEnabled);
-        editor.commit();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(SETTINGS_USE_RAGE_SHAKE_KEY, isEnabled)
+                .apply();
     }
 
     /**

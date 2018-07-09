@@ -1,6 +1,7 @@
 /*
  * Copyright 2014 OpenMarket Ltd
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +18,28 @@
 
 package im.vector.activity;
 
-import android.os.Bundle;
+import org.jetbrains.annotations.NotNull;
 
 import im.vector.R;
+import kotlin.Pair;
 
 /**
  * LoggingOutActivity displays an animation while a session log out is in progress.
  */
 public class LoggingOutActivity extends MXCActionBarActivity {
+    @NotNull
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.vector_activity_splash);
+    public Pair getOtherThemes() {
+        return new Pair(R.style.AppTheme_NoActionBar_Dark, R.style.AppTheme_NoActionBar_Black);
+    }
+
+    @Override
+    public int getLayoutRes() {
+        return R.layout.vector_activity_splash;
+    }
+
+    @Override
+    public void initUiAndData() {
+        // Nothing to do
     }
 }

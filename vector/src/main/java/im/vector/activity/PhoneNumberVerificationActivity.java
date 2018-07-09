@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@ package im.vector.activity;
 
 import android.content.Context;
 import android.content.Intent;
-import android.os.Bundle;
 import android.support.design.widget.TextInputEditText;
 import android.support.design.widget.TextInputLayout;
 import android.support.v7.widget.Toolbar;
@@ -26,13 +26,12 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.KeyEvent;
-import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.jetbrains.annotations.NotNull;
 import org.matrix.androidsdk.MXSession;
 import org.matrix.androidsdk.rest.callback.ApiCallback;
 import org.matrix.androidsdk.rest.model.MatrixError;
@@ -41,7 +40,7 @@ import org.matrix.androidsdk.util.Log;
 
 import im.vector.Matrix;
 import im.vector.R;
-import im.vector.util.ThemeUtils;
+import kotlin.Pair;
 
 public class PhoneNumberVerificationActivity extends RiotAppCompatActivity implements TextView.OnEditorActionListener, TextWatcher {
 
@@ -52,7 +51,6 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
 
     private TextInputEditText mPhoneNumberCode;
     private TextInputLayout mPhoneNumberCodeLayout;
-    private View mLoadingView;
 
     private MXSession mSession;
     private ThreePid mThreePid;
@@ -61,7 +59,7 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
     // Used to prevent user to submit several times in a row
     private boolean mIsSubmittingToken;
 
-     /*
+    /*
      * *********************************************************************************************
      * Static methods
      * *********************************************************************************************
@@ -75,17 +73,29 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
     }
 
     /*
-    * *********************************************************************************************
-    * Activity lifecycle
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Activity lifecycle
+     * *********************************************************************************************
+     */
+
+    @NotNull
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public Pair getOtherThemes() {
+        return new Pair(R.style.AppTheme_NoActionBar_Dark, R.style.AppTheme_NoActionBar_Black);
+    }
 
-        setTitle(R.string.settings_phone_number_verification);
-        setContentView(R.layout.activity_phone_number_verification);
+    @Override
+    public int getLayoutRes() {
+        return R.layout.activity_phone_number_verification;
+    }
 
+    @Override
+    public int getTitleRes() {
+        return R.string.settings_phone_number_verification;
+    }
+
+    @Override
+    public void initUiAndData() {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         if (null != getSupportActionBar()) {
@@ -95,7 +105,7 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
 
         mPhoneNumberCode = findViewById(R.id.phone_number_code_value);
         mPhoneNumberCodeLayout = findViewById(R.id.phone_number_code);
-        mLoadingView = findViewById(R.id.loading_view);
+        setWaitingView(findViewById(R.id.loading_view));
 
         final Intent intent = getIntent();
         mSession = Matrix.getInstance(this).getSession(intent.getStringExtra(EXTRA_MATRIX_ID));
@@ -118,18 +128,13 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_phone_number_verification, menu);
-        CommonActivityUtils.tintMenuIcons(menu, ThemeUtils.getColor(this, R.attr.icon_tint_on_dark_action_bar_color));
-        return true;
+    public int getMenuRes() {
+        return R.menu.menu_phone_number_verification;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case android.R.id.home:
-                finish();
-                return true;
             case R.id.action_verify_phone_number:
                 submitCode();
                 return true;
@@ -139,10 +144,10 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
     }
 
     /*
-    * *********************************************************************************************
-    * Utils
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Utils
+     * *********************************************************************************************
+     */
 
     /**
      * Submit code (token) to attach phone number to account
@@ -154,9 +159,12 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
                 mPhoneNumberCodeLayout.setErrorEnabled(true);
                 mPhoneNumberCodeLayout.setError(getString(R.string.settings_phone_number_verification_error_empty_code));
             } else {
-                mLoadingView.setVisibility(View.VISIBLE);
-                mSession.getThirdPidRestClient()
-                        .submitValidationToken(mThreePid.medium, mPhoneNumberCode.getText().toString(), mThreePid.clientSecret, mThreePid.sid, new ApiCallback<Boolean>() {
+                showWaitingView();
+                mSession.getThirdPidRestClient().submitValidationToken(mThreePid.medium,
+                        mPhoneNumberCode.getText().toString(),
+                        mThreePid.clientSecret,
+                        mThreePid.sid,
+                        new ApiCallback<Boolean>() {
                             @Override
                             public void onSuccess(Boolean isSuccess) {
                                 if (isSuccess) {
@@ -218,15 +226,15 @@ public class PhoneNumberVerificationActivity extends RiotAppCompatActivity imple
 
     private void onSubmitCodeError(final String errorMessage) {
         mIsSubmittingToken = false;
-        mLoadingView.setVisibility(View.GONE);
+        hideWaitingView();
         Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT).show();
     }
 
     /*
-    * *********************************************************************************************
-    * Listeners
-    * *********************************************************************************************
-    */
+     * *********************************************************************************************
+     * Listeners
+     * *********************************************************************************************
+     */
 
     @Override
     public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {

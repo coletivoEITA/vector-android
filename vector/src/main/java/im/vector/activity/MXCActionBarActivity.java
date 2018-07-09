@@ -1,5 +1,6 @@
 /*
  * Copyright 2014 OpenMarket Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,8 @@ package im.vector.activity;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
+import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
@@ -38,7 +41,8 @@ import im.vector.VectorApp;
 /**
  * extends ActionBarActivity to manage the rageshake
  */
-public class MXCActionBarActivity extends RiotAppCompatActivity {
+public abstract class MXCActionBarActivity extends RiotAppCompatActivity {
+    // TODO Make this protected
     public static final String EXTRA_MATRIX_ID = "MXCActionBarActivity.EXTRA_MATRIX_ID";
 
     MXSession mSession = null;
@@ -59,18 +63,18 @@ public class MXCActionBarActivity extends RiotAppCompatActivity {
     /**
      * Return the used MXSession from an intent.
      *
-     * @param context the application context
      * @param intent  the intent
-     * @return the MXSession if it exists.
+     * @return the MXSession if it exists, or null.
      */
-    static MXSession getSession(Context context, Intent intent) {
+    @Nullable
+    protected MXSession getSession(Intent intent) {
         String matrixId = null;
 
         if (intent.hasExtra(EXTRA_MATRIX_ID)) {
             matrixId = intent.getStringExtra(EXTRA_MATRIX_ID);
         }
 
-        return Matrix.getInstance(context).getSession(matrixId);
+        return Matrix.getInstance(this).getSession(matrixId);
     }
 
     public MXSession getSession() {
@@ -92,8 +96,8 @@ public class MXCActionBarActivity extends RiotAppCompatActivity {
         // ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(...
         // ActivityCompat.startActivity(activity, new Intent(activity, DetailActivity.class),  options.toBundle());
 
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
-            this.overridePendingTransition(R.anim.anim_slide_in_bottom, R.anim.anim_slide_nothing);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            overridePendingTransition(R.anim.anim_slide_in_bottom, R.anim.anim_slide_nothing);
         } else {
             // the animation is enabled in the theme
         }
@@ -108,8 +112,8 @@ public class MXCActionBarActivity extends RiotAppCompatActivity {
         //
         // ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(...
         // ActivityCompat.startActivity(activity, new Intent(activity, DetailActivity.class),  options.toBundle());
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
-            this.overridePendingTransition(R.anim.anim_slide_nothing, R.anim.anim_slide_out_bottom);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            overridePendingTransition(R.anim.anim_slide_nothing, R.anim.anim_slide_out_bottom);
         } else {
             // the animation is enabled in the theme
         }

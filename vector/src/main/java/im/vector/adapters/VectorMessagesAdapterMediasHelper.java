@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 Vector Creations Ltd
+ * Copyright 2018 New Vector Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +30,8 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.RequestOptions;
 import com.google.gson.JsonElement;
 
 import org.matrix.androidsdk.MXSession;
@@ -37,13 +40,14 @@ import org.matrix.androidsdk.listeners.IMXMediaDownloadListener;
 import org.matrix.androidsdk.listeners.IMXMediaUploadListener;
 import org.matrix.androidsdk.listeners.MXMediaDownloadListener;
 import org.matrix.androidsdk.listeners.MXMediaUploadListener;
-import org.matrix.androidsdk.rest.model.crypto.EncryptedFileInfo;
 import org.matrix.androidsdk.rest.model.Event;
+import org.matrix.androidsdk.rest.model.MatrixError;
+import org.matrix.androidsdk.rest.model.crypto.EncryptedFileInfo;
 import org.matrix.androidsdk.rest.model.message.FileMessage;
 import org.matrix.androidsdk.rest.model.message.ImageInfo;
 import org.matrix.androidsdk.rest.model.message.ImageMessage;
-import org.matrix.androidsdk.rest.model.MatrixError;
 import org.matrix.androidsdk.rest.model.message.Message;
+import org.matrix.androidsdk.rest.model.message.StickerMessage;
 import org.matrix.androidsdk.rest.model.message.VideoInfo;
 import org.matrix.androidsdk.rest.model.message.VideoMessage;
 import org.matrix.androidsdk.util.JsonUtils;
@@ -71,7 +75,12 @@ class VectorMessagesAdapterMediasHelper {
     private final int mNotSentMessageTextColor;
     private final int mDefaultMessageTextColor;
 
-    VectorMessagesAdapterMediasHelper(Context context, MXSession session, int maxImageWidth, int maxImageHeight, int notSentMessageTextColor, int defaultMessageTextColor) {
+    VectorMessagesAdapterMediasHelper(Context context,
+                                      MXSession session,
+                                      int maxImageWidth,
+                                      int maxImageHeight,
+                                      int notSentMessageTextColor,
+                                      int defaultMessageTextColor) {
         mContext = context;
         mSession = session;
         mMaxImageWidth = maxImageWidth;
@@ -226,7 +235,7 @@ class VectorMessagesAdapterMediasHelper {
                     orientation = imageInfo.orientation;
                 }
             }
-        } else { // video
+        } else if (message instanceof VideoMessage){ // video
             VideoMessage videoMessage = (VideoMessage) message;
             videoMessage.checkMediaUrls();
 
@@ -238,7 +247,9 @@ class VectorMessagesAdapterMediasHelper {
             VideoInfo videoinfo = videoMessage.info;
 
             if (null != videoinfo) {
-                if ((null != videoMessage.info.thumbnail_info) && (null != videoMessage.info.thumbnail_info.w) && (null != videoMessage.info.thumbnail_info.h)) {
+                if (null != videoMessage.info.thumbnail_info
+                        && null != videoMessage.info.thumbnail_info.w
+                        && null != videoMessage.info.thumbnail_info.h) {
                     thumbWidth = videoMessage.info.thumbnail_info.w;
                     thumbHeight = videoMessage.info.thumbnail_info.h;
                 }
@@ -259,14 +270,39 @@ class VectorMessagesAdapterMediasHelper {
         final FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) informationLayout.getLayoutParams();
 
         // the thumbnails are always pre - rotated
-        String downloadId = mMediasCache.loadBitmap(mSession.getHomeServerConfig(), imageView, thumbUrl, maxImageWidth, maxImageHeight, rotationAngle, ExifInterface.ORIENTATION_UNDEFINED, "image/jpeg", encryptedFileInfo);
+        String downloadId = null;
+        if (!event.getType().equals(Event.EVENT_TYPE_STICKER)) {
+            downloadId = mMediasCache.loadBitmap(mSession.getHomeServerConfig(),
+                    imageView, thumbUrl, maxImageWidth, maxImageHeight, rotationAngle,
+                    ExifInterface.ORIENTATION_UNDEFINED, "image/jpeg", encryptedFileInfo);
+        }
 
-        // test if the media is downloading the thumbnail is not downloading
+        // test if the media is downloading when the thumbnail is not downloading
         if (null == downloadId) {
             if (message instanceof VideoMessage) {
                 downloadId = mMediasCache.downloadIdFromUrl(((VideoMessage) message).getUrl());
-            } else {
+            } else if (message instanceof ImageMessage) {
                 downloadId = mMediasCache.downloadIdFromUrl(((ImageMessage) message).getUrl());
+            }
+        }
+
+        // Use Glide library to display stickers into ImageView
+        // Glide support animated gif
+        if (event.getType().equals(Event.EVENT_TYPE_STICKER)) {
+            // Check whether the sticker url is a valid Matrix media content URI, and convert it in an actual url.
+            String downloadableUrl = mSession.getContentManager().getDownloadableUrl(((StickerMessage) message).getUrl());
+            if (null != downloadableUrl) {
+                Glide.with(mContext)
+                        .load(downloadableUrl)
+                        .apply(new RequestOptions()
+                                .override(maxImageWidth, maxImageHeight)
+                                .fitCenter()
+                                .placeholder(R.drawable.sticker_placeholder)
+                        )
+                        .into(imageView);
+            } else {
+                // Display the placeholder
+                imageView.setImageResource(R.drawable.sticker_placeholder);
             }
         }
 
@@ -403,7 +439,9 @@ class VectorMessagesAdapterMediasHelper {
         if (!mSession.getMyUserId().equals(event.getSender()) || event.isUndeliverable() || !hasContentInfo) {
             uploadProgressLayout.setVisibility(View.GONE);
             uploadSpinner.setVisibility(View.GONE);
-            showUploadFailure(convertView, isVideoMessage ? VectorMessagesAdapter.ROW_TYPE_VIDEO : VectorMessagesAdapter.ROW_TYPE_IMAGE, event.isUndeliverable());
+            showUploadFailure(convertView,
+                    isVideoMessage ? VectorMessagesAdapter.ROW_TYPE_VIDEO : VectorMessagesAdapter.ROW_TYPE_IMAGE,
+                    event.isUndeliverable());
             return;
         }
 
@@ -424,11 +462,10 @@ class VectorMessagesAdapterMediasHelper {
         if (isUploadingThumbnail) {
             progress = mSession.getMediasCache().getProgressValueForUploadId(uploadingUrl);
         } else {
-            if (isVideoMessage) {
+            if (message instanceof VideoMessage) {
                 uploadingUrl = ((VideoMessage) message).getUrl();
                 isUploadingContent = ((VideoMessage) message).isLocalContent();
-
-            } else {
+            } else if (message instanceof ImageMessage){
                 uploadingUrl = ((ImageMessage) message).getUrl();
                 isUploadingContent = ((ImageMessage) message).isLocalContent();
             }
