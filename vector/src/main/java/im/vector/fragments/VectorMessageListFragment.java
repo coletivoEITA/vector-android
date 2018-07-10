@@ -94,9 +94,9 @@ import im.vector.util.ThemeUtils;
 import im.vector.util.VectorImageGetter;
 import im.vector.util.VectorUtils;
 import im.vector.widgets.WidgetsManager;
-import retrofit.Callback;
-import retrofit.RetrofitError;
-import retrofit.client.Response;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class VectorMessageListFragment extends MatrixMessageListFragment implements IMessagesAdapterActionsListener {
     private static final String LOG_TAG = VectorMessageListFragment.class.getSimpleName();
@@ -1322,14 +1322,21 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             mRestClient = new CloudRestClient(riosCloudServerUrl);
         }
 
-        mRestClient.getRoomSharedFolders(mRoom.getRoomId(), mSession.getMyUserId(), new Callback<List<CloudFolder>>() {
+        Call<List<CloudFolder>> call = mRestClient.getRoomSharedFolders(mRoom.getRoomId(), mSession.getMyUserId());
+
+        call.enqueue(new Callback<List<CloudFolder>>() {
             @Override
-            public void success(List<CloudFolder> cloudFolders, Response response) {
-                aListener.onSuccess(cloudFolders);
+            public void onResponse(Call<List<CloudFolder>> call, Response<List<CloudFolder>> response) {
+                if (response.isSuccessful()) {
+                    List<CloudFolder> callFolders = response.body();
+                    aListener.onSuccess(callFolders);
+                } else {
+                    // error response, no access to resource?
+                }
             }
 
             @Override
-            public void failure(RetrofitError error) {
+            public void onFailure(Call<List<CloudFolder>> call, Throwable t) {
                 aListener.onFailure();
             }
         });

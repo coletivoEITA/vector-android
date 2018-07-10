@@ -18,6 +18,7 @@ package im.vector.cloud;
 
 import java.util.List;
 
+import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.http.GET;
 import retrofit2.http.Query;
@@ -25,5 +26,5 @@ import retrofit2.http.Query;
 public interface CloudService {
 
     @GET("/index.php/apps/matrixbridge/room_shared_folders")
-    void roomSharedFolders(@Query("room_id") String roomId, @Query("user_id") String userId, Callback<List<CloudFolder>> callback);
+    Call<List<CloudFolder>> roomSharedFolders(@Query("room_id") String roomId, @Query("user_id") String userId);
 }

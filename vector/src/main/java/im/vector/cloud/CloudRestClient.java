@@ -24,6 +24,7 @@ import org.matrix.androidsdk.util.JsonUtils;
 
 import java.util.List;
 
+import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
@@ -55,11 +56,13 @@ public class CloudRestClient {
         mApi = adapter.create(CloudService.class);
     }
 
-    public void getRoomSharedFolders(String roomId, String userId, Callback<List<CloudFolder>> callback) {
+    public Call<List<CloudFolder>> getRoomSharedFolders(String roomId, String userId) {
+        Call<List<CloudFolder>> callback = null;
         try {
-            mApi.roomSharedFolders(roomId, userId, callback);
+            callback = mApi.roomSharedFolders(roomId, userId);
         } catch (Throwable t) {
 
         }
+        return callback;
     }
 }

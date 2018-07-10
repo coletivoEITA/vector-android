@@ -18,6 +18,8 @@ package im.vector.cloud;
 
 import java.util.List;
 
+import retrofit2.Call;
+
 public interface CloudFoldersResponseListener {
     public void onSuccess(List<CloudFolder> cloudFolders);
     public void onFailure();

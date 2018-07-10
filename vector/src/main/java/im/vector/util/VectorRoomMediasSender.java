@@ -53,6 +53,7 @@ import im.vector.cloud.CloudFolder;
 import im.vector.cloud.CloudFoldersResponseListener;
 import im.vector.fragments.ImageSizeSelectionDialogFragment;
 import im.vector.fragments.VectorMessageListFragment;
+import retrofit2.Call;
 
 // VectorRoomMediasSender helps the vectorRoomActivity to manage medias .
 public class VectorRoomMediasSender {
@@ -881,6 +882,7 @@ public class VectorRoomMediasSender {
                 aListener.onDone();
                 return;
             }
+
             mVectorMessageListFragment.getTargetFolders(new CloudFoldersResponseListener() {
                 @Override
                 public void onSuccess(final List<CloudFolder> cloudFolders) {
