@@ -82,7 +82,8 @@ android {
     }
 
     // Specifies a flavor dimension (no need to specify it in each productsFlavor, cause we only declare one dimension).
-    flavorDimensions "flavor_dimension_vector"
+    //flavorDimensions "flavor_dimension_vector"
+    flavorDimensions "store"
 
     productFlavors {
         app {

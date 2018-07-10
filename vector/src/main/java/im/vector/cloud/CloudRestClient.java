@@ -18,19 +18,15 @@
 package im.vector.cloud;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.squareup.okhttp.OkHttpClient;
+import okhttp3.OkHttpClient;
 
 import org.matrix.androidsdk.util.JsonUtils;
 
 import java.util.List;
 
-import retrofit.Callback;
-import retrofit.RestAdapter;
-import retrofit.RetrofitError;
-import retrofit.client.OkClient;
-import retrofit.client.Response;
-import retrofit.converter.GsonConverter;
+import retrofit2.Callback;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 
 /**
@@ -50,10 +46,10 @@ public class CloudRestClient {
         gson = JsonUtils.getGson(false);
 
         // Rest adapter for turning API interfaces into actual REST-calling objects
-        RestAdapter adapter = new RestAdapter.Builder()
-                .setEndpoint(serverUrl)
-                .setConverter(new GsonConverter(gson))
-                .setClient(new OkClient(mOkHttpClient))
+        Retrofit adapter = new Retrofit.Builder()
+                .baseUrl(serverUrl)
+                .addConverterFactory(GsonConverterFactory.create(gson))
+                .client(mOkHttpClient)
                 .build();
 
         mApi = adapter.create(CloudService.class);

@@ -18,9 +18,9 @@ package im.vector.cloud;
 
 import java.util.List;
 
-import retrofit.Callback;
-import retrofit.http.GET;
-import retrofit.http.Query;
+import retrofit2.Callback;
+import retrofit2.http.GET;
+import retrofit2.http.Query;
 
 public interface CloudService {
 
