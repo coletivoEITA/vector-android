@@ -16,7 +16,42 @@
 
 package im.vector.cloud;
 
+import com.google.gson.JsonElement;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import im.vector.rios.Dir;
+import tellh.com.recyclertreeview_lib.TreeNode;
+
 public class CloudFolder {
     public int id;
     public String name;
+    public boolean isSelected = false;
+    public List<CloudFolder> children;
+
+    public TreeNode<Dir> toTreeNode(CloudFolder selected) {
+        TreeNode<Dir> ret = new TreeNode<>(new Dir(this.name,this.id));
+
+        for (CloudFolder child: children) {
+            TreeNode<Dir> childNode = child.toTreeNode(selected);
+            ret.addChild(childNode);
+            if (selected != null && selected.id == child.id) {
+                childNode.getContent().isSelected = true;
+                TreeNode<Dir> parent = ret;
+                while (parent != null) {
+                    if (!parent.isExpand()) {
+                        parent.toggle();
+                    }
+                    parent = parent.getParent();
+                }
+            }
+        }
+        return ret;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj != null && obj instanceof CloudFolder && ((CloudFolder) obj).id == this.id;
+    }
 }

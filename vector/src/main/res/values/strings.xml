@@ -994,4 +994,5 @@
 
     <string name="error_empty_field_your_password">Please enter your password.</string>
 
+    <string name="rios_choose_folder_message_ok">Choose</string>
 </resources>

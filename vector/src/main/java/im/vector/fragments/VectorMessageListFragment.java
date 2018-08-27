@@ -1329,6 +1329,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             public void onResponse(Call<List<CloudFolder>> call, Response<List<CloudFolder>> response) {
                 if (response.isSuccessful()) {
                     List<CloudFolder> callFolders = response.body();
+                    PreferencesManager.setCloudFolders(getContext(), mRoom.getRoomId(), callFolders);
                     aListener.onSuccess(callFolders);
                 } else {
                     // error response, no access to resource?
@@ -1337,8 +1338,29 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
 
             @Override
             public void onFailure(Call<List<CloudFolder>> call, Throwable t) {
-                aListener.onFailure();
+                aListener.onSuccess(PreferencesManager.getCloudFolders(getContext(),mRoom.getRoomId()));
+
+                /*
+                String tClass = t.getClass().getCanonicalName();
+
+                if (tClass.startsWith("java.net.")) {
+                    //Network error: tries to get in shared properties
+                    return PreferencesManager
+
+                } else {
+                    aListener.onFailure();
+                }
+                */
             }
         });
+    }
+
+    public void setSelectedFolder(CloudFolder cloudFolder) {
+        PreferencesManager.setSelectedFolder(getContext(), mRoom.getRoomId(), cloudFolder);
+    }
+
+    public CloudFolder getSelectedFolder() {
+        CloudFolder selectedFolder = PreferencesManager.getSelectedFolder(getContext(), mRoom.getRoomId());
+        return selectedFolder;
     }
 }

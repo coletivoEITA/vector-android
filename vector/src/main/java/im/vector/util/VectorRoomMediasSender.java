@@ -22,14 +22,18 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Html;
 import android.text.TextUtils;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.google.gson.JsonPrimitive;
@@ -45,6 +49,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import im.vector.R;
@@ -53,7 +58,11 @@ import im.vector.cloud.CloudFolder;
 import im.vector.cloud.CloudFoldersResponseListener;
 import im.vector.fragments.ImageSizeSelectionDialogFragment;
 import im.vector.fragments.VectorMessageListFragment;
-import retrofit2.Call;
+import im.vector.rios.Dir;
+import im.vector.rios.DirectoryNodeBinder;
+import im.vector.rios.FileNodeBinder;
+import tellh.com.recyclertreeview_lib.TreeNode;
+import tellh.com.recyclertreeview_lib.TreeViewAdapter;
 
 // VectorRoomMediasSender helps the vectorRoomActivity to manage medias .
 public class VectorRoomMediasSender {
@@ -249,6 +258,9 @@ public class VectorRoomMediasSender {
                         public void onDone() {
                             if (!TextUtils.isEmpty(mDestinationFolder)) {
                                 sharedDataItem.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
+                                if ((null == mSharedDataItems) || (0 == mSharedDataItems.size())) {
+                                    mDestinationFolder = null; // Last media sent!
+                                }
                             }
                             if (mimeType.startsWith("image/") &&
                                     (ResourceUtils.MIME_TYPE_JPEG.equals(mimeType) ||
@@ -773,6 +785,9 @@ public class VectorRoomMediasSender {
                             RoomMediaMessage rmMessage = new RoomMediaMessage(Uri.parse(fImageUrl), roomMediaMessage.getFileName(mVectorRoomActivity));
                             if (!TextUtils.isEmpty(mDestinationFolder)) {
                                 rmMessage.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
+                                if ((null == mSharedDataItems) || (0 == mSharedDataItems.size())) {
+                                    mDestinationFolder = null; // Last media sent!
+                                }
                             }
                             mVectorMessageListFragment.sendMediaMessage(rmMessage);
                             aListener.onDone();
@@ -829,6 +844,9 @@ public class VectorRoomMediasSender {
                                                             RoomMediaMessage rmMessage = new RoomMediaMessage(Uri.parse(fImageUrl), roomMediaMessage.getFileName(mVectorRoomActivity));
                                                             if (!TextUtils.isEmpty(mDestinationFolder)) {
                                                                 rmMessage.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
+                                                                if ((null == mSharedDataItems) || (0 == mSharedDataItems.size())) {
+                                                                    mDestinationFolder = null; // Last media sent!
+                                                                }
                                                             }
                                                             mVectorMessageListFragment.sendMediaMessage(rmMessage);
                                                             aListener.onDone();
@@ -890,16 +908,26 @@ public class VectorRoomMediasSender {
                         mDestinationFolder = "";
                         aListener.onDone();
                     } else {
-                        ArrayList<String> folderNamesList = new ArrayList<String>();
-                        folderNamesList.add("/");
-                        for (int i=0; i<cloudFolders.size(); i++) {
-                            folderNamesList.add(cloudFolders.get(i).name);
-                        }
-
-                        String stringsArray[] = folderNamesList.toArray(new String[0]);
+                        RecyclerView rv = new RecyclerView(mVectorRoomActivity);
+                        cloudFoldersViewBind(rv, cloudFolders);
 
                         mImageSizesListDialog = new AlertDialog.Builder(mVectorRoomActivity)
                                 .setTitle(R.string.cloud_folder_options)
+                                .setView(rv)
+                                .setPositiveButton(R.string.rios_choose_folder_message_ok, new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        String result = "";
+                                        if (selectedCloudDir != null) {
+                                            result += Integer.toString(selectedCloudDir.fileId) + ":" + selectedCloudDir.dirName;
+                                            mVectorMessageListFragment.setSelectedFolder(selectedCloudDir.toCloudFolder());
+                                        }
+                                        mDestinationFolder = result;
+                                        mImageSizesListDialog.dismiss();
+                                        aListener.onDone();
+                                    }
+                                })
+                                /*
                                 .setSingleChoiceItems(stringsArray, -1, new DialogInterface.OnClickListener() {
                                     @Override
                                     public void onClick(DialogInterface dialog, int which) {
@@ -913,7 +941,7 @@ public class VectorRoomMediasSender {
                                         mImageSizesListDialog.dismiss();
                                         aListener.onDone();
                                     }
-                                })
+                                }) */
                                 .setOnCancelListener(new DialogInterface.OnCancelListener() {
                                     @Override
                                     public void onCancel(DialogInterface dialog) {
@@ -939,6 +967,58 @@ public class VectorRoomMediasSender {
         } catch (Exception e) {
             aListener.onCancel();
         }
+    }
+
+    public static RecyclerView.ViewHolder selectedTreeItemViewHolder = null;
+    public static Dir selectedCloudDir = null;
+
+    private void cloudFoldersViewBind(RecyclerView rv, List<CloudFolder> cloudFolders) {
+        selectedTreeItemViewHolder = null;
+        selectedCloudDir = null;
+
+        List<TreeNode> nodes = new ArrayList<>();
+        CloudFolder selectedFolder = mVectorMessageListFragment.getSelectedFolder();
+        for (CloudFolder cloudFolder: cloudFolders) {
+            nodes.add(cloudFolder.toTreeNode(selectedFolder));
+        }
+
+        rv.setLayoutManager(new LinearLayoutManager(mVectorRoomActivity));
+        TreeViewAdapter adapter = new TreeViewAdapter(nodes, Arrays.asList(new FileNodeBinder(), new DirectoryNodeBinder()));
+        // whether collapse child nodes when their parent node was close.
+//        adapter.ifCollapseChildWhileCollapseParent(true);
+        adapter.setOnTreeNodeListener(new TreeViewAdapter.OnTreeNodeListener() {
+            @Override
+            public boolean onClick(TreeNode node, RecyclerView.ViewHolder holder) {
+                if (selectedTreeItemViewHolder != null) {
+                    selectedTreeItemViewHolder.itemView.setBackgroundColor(Color.TRANSPARENT);
+                }
+                if (selectedCloudDir != null) {
+                    selectedCloudDir.isSelected = false;
+                }
+                holder.itemView.setBackgroundColor(Color.GREEN);
+                selectedTreeItemViewHolder = holder;
+                selectedCloudDir = (Dir) node.getContent();
+                selectedCloudDir.isSelected = true;
+                Toast.makeText(mVectorRoomActivity,node.toString(),Toast.LENGTH_SHORT);
+                if (!node.isLeaf()) {
+                    //Update and toggle the node.
+                    onToggle(!node.isExpand(), holder);
+//                    if (!node.isExpand())
+//                        adapter.collapseBrotherNode(node);
+                }
+                return false;
+            }
+
+            @Override
+            public void onToggle(boolean isExpand, RecyclerView.ViewHolder holder) {
+                DirectoryNodeBinder.ViewHolder dirViewHolder = (DirectoryNodeBinder.ViewHolder) holder;
+                final ImageView ivArrow = dirViewHolder.getIvArrow();
+                int rotateDegree = isExpand ? 90 : -90;
+                ivArrow.animate().rotationBy(rotateDegree)
+                        .start();
+            }
+        });
+        rv.setAdapter(adapter);
     }
 
 }

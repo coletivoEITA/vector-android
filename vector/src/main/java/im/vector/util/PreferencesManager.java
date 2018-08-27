@@ -29,15 +29,22 @@ import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.text.TextUtils;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+
 import org.matrix.androidsdk.util.Log;
 
 import java.io.File;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import im.vector.R;
+import im.vector.cloud.CloudFolder;
 import im.vector.repositories.ServerUrlsRepository;
 
 public class PreferencesManager {
@@ -146,6 +153,9 @@ public class PreferencesManager {
     private static final String DID_ASK_TO_USE_ANALYTICS_TRACKING_KEY = "DID_ASK_TO_USE_ANALYTICS_TRACKING_KEY";
 
     public static final String SETTINGS_DEACTIVATE_ACCOUNT_KEY = "SETTINGS_DEACTIVATE_ACCOUNT_KEY";
+
+    public static final String SETTINGS_ROOM_CLOUD_FOLDERS = "SETTINGS_ROOM_CLOUD_FOLDERS";
+    public static final String SETTINGS_ROOM_SELECTED_CLOUD_FOLDER = "SETTINGS_ROOM_SELECTED_CLOUD_FOLDER";
 
     private static final int MEDIA_SAVING_3_DAYS = 0;
     private static final int MEDIA_SAVING_1_WEEK = 1;
@@ -722,5 +732,75 @@ public class PreferencesManager {
      */
     public static boolean displayAllEvents(Context context) {
         return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_DISPLAY_ALL_EVENTS_KEY, false);
+    }
+
+    /**
+     * Gets the list of possible folders for the room
+     *
+     * @param context the context
+     * @param mxRoomId Matrix Room ID
+     * @return true if it was already requested
+     */
+    public static List<CloudFolder> getCloudFolders(Context context, String mxRoomId) {
+        Gson gson = new GsonBuilder().create();
+        String currentPrefs =  PreferenceManager
+                .getDefaultSharedPreferences(context)
+                .getString(SETTINGS_ROOM_CLOUD_FOLDERS + mxRoomId,null);
+        if (currentPrefs != null) {
+            Type listType = new TypeToken<ArrayList<CloudFolder>>(){}.getType();
+            return gson.fromJson(currentPrefs,listType);
+        }
+        return new ArrayList<CloudFolder>();
+    }
+
+    /**
+     * Gets the default/last selected folder for the room
+     *
+     * @param context the context
+     * @param mxRoomId Matrix Room ID
+     * @return true if it was already requested
+     */
+    public static CloudFolder getSelectedFolder(Context context, String mxRoomId) {
+        Gson gson = new GsonBuilder().create();
+        String currentPrefs =  PreferenceManager
+                .getDefaultSharedPreferences(context)
+                .getString(SETTINGS_ROOM_SELECTED_CLOUD_FOLDER + mxRoomId,null);
+        if (currentPrefs != null) {
+            Type folderType = new TypeToken<CloudFolder>(){}.getType();
+            return gson.fromJson(currentPrefs,folderType);
+        }
+        return null;
+    }
+
+    /**
+     * Sets the default/last folders for the room
+     *
+     * @param context the context
+     * @param mxRoomId Matrix Room ID
+     * @param folders CloudFolder list to be set
+     * @return true if it was already requested
+     */
+    public static void setCloudFolders(Context context, String mxRoomId, List<CloudFolder> folders) {
+        Gson gson = new GsonBuilder().create();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putString(SETTINGS_ROOM_CLOUD_FOLDERS + mxRoomId, gson.toJson(folders))
+                .apply();
+    }
+
+    /**
+     * Sets the default/last selected folder for the room
+     *
+     * @param context the context
+     * @param mxRoomId Matrix Room ID
+     * @param folder CloudFolder to be set
+     * @return true if it was already requested
+     */
+    public static void setSelectedFolder(Context context, String mxRoomId, CloudFolder folder) {
+        Gson gson = new GsonBuilder().create();
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putString(SETTINGS_ROOM_SELECTED_CLOUD_FOLDER + mxRoomId, gson.toJson(folder))
+                .apply();
     }
 }
