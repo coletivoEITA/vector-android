@@ -40,7 +40,7 @@ import im.vector.R;
 /**
  * AccountCreationActivity is the fallback account creation activity
  */
-public class AccountCreationActivity extends RiotAppCompatActivity {
+public class AccountCreationActivity extends VectorAppCompatActivity {
     private static final String LOG_TAG = AccountCreationActivity.class.getSimpleName();
 
     public static final String EXTRA_HOME_SERVER_ID = "AccountCreationActivity.EXTRA_HOME_SERVER_ID";
@@ -171,7 +171,7 @@ public class AccountCreationActivity extends RiotAppCompatActivity {
                         }.getType());
 
                     } catch (Exception e) {
-                        Log.e(LOG_TAG, "## shouldOverrideUrlLoading() : fromJson failed " + e.getMessage());
+                        Log.e(LOG_TAG, "## shouldOverrideUrlLoading() : fromJson failed " + e.getMessage(), e);
                     }
 
                     // succeeds to parse parameters

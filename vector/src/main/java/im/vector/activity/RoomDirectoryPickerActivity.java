@@ -50,7 +50,7 @@ import im.vector.adapters.RoomDirectoryAdapter;
 import im.vector.util.RoomDirectoryData;
 import kotlin.Pair;
 
-public class RoomDirectoryPickerActivity extends RiotAppCompatActivity implements RoomDirectoryAdapter.OnSelectRoomDirectoryListener {
+public class RoomDirectoryPickerActivity extends VectorAppCompatActivity implements RoomDirectoryAdapter.OnSelectRoomDirectoryListener {
     // LOG TAG
     private static final String LOG_TAG = RoomDirectoryPickerActivity.class.getSimpleName();
 
@@ -194,7 +194,7 @@ public class RoomDirectoryPickerActivity extends RiotAppCompatActivity implement
 
             @Override
             public void onNetworkError(Exception e) {
-                Log.e(LOG_TAG, "## refreshDirectoryServersList() : " + e.getMessage());
+                Log.e(LOG_TAG, "## refreshDirectoryServersList() : " + e.getMessage(), e);
                 onDone(new ArrayList<RoomDirectoryData>());
             }
 
@@ -206,7 +206,7 @@ public class RoomDirectoryPickerActivity extends RiotAppCompatActivity implement
 
             @Override
             public void onUnexpectedError(Exception e) {
-                Log.e(LOG_TAG, "## onUnexpectedError() : " + e.getMessage());
+                Log.e(LOG_TAG, "## onUnexpectedError() : " + e.getMessage(), e);
                 onDone(new ArrayList<RoomDirectoryData>());
             }
         });

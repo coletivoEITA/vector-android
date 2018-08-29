@@ -65,6 +65,7 @@ import im.vector.Matrix;
 import im.vector.R;
 import im.vector.VectorApp;
 import im.vector.util.CallsManager;
+import im.vector.util.PermissionsToolsKt;
 import im.vector.util.VectorUtils;
 import im.vector.util.ViewUtilKt;
 import im.vector.view.VectorPendingCallView;
@@ -73,7 +74,7 @@ import kotlin.Pair;
 /**
  * VectorCallViewActivity is the call activity.
  */
-public class VectorCallViewActivity extends RiotAppCompatActivity implements SensorEventListener {
+public class VectorCallViewActivity extends VectorAppCompatActivity implements SensorEventListener {
     private static final String LOG_TAG = VectorCallViewActivity.class.getSimpleName();
 
     public static final String EXTRA_MATRIX_ID = "CallViewActivity.EXTRA_MATRIX_ID";
@@ -133,7 +134,6 @@ public class VectorCallViewActivity extends RiotAppCompatActivity implements Sen
 
     private IMXCall mCall;
     private CallsManager mCallsManager;
-    private int mPermissionCode;
 
     // on Samsung devices, the application is suspended when the screen is turned off
     // so the call must not be suspended
@@ -512,11 +512,12 @@ public class VectorCallViewActivity extends RiotAppCompatActivity implements Sen
         VectorUtils.loadCallAvatar(this, mSession, mAvatarView, mCall.getRoom());
 
         mIncomingCallTabbar.setVisibility(CallsManager.getSharedInstance().isRinging() && mCall.isIncoming() ? View.VISIBLE : View.GONE);
-        mPermissionCode = mCall.isVideo() ?
-                CommonActivityUtils.REQUEST_CODE_PERMISSION_VIDEO_IP_CALL : CommonActivityUtils.REQUEST_CODE_PERMISSION_AUDIO_IP_CALL;
+
+        final int permissions = mCall.isVideo() ? PermissionsToolsKt.PERMISSIONS_FOR_VIDEO_IP_CALL : PermissionsToolsKt.PERMISSIONS_FOR_AUDIO_IP_CALL;
+        final int requestCode = mCall.isVideo() ? PermissionsToolsKt.PERMISSION_REQUEST_CODE_VIDEO_CALL : PermissionsToolsKt.PERMISSION_REQUEST_CODE_AUDIO_CALL;
 
         // the user can only accept if the dedicated permissions are granted
-        mAcceptIncomingCallButton.setVisibility(CommonActivityUtils.checkPermissions(mPermissionCode, this) ? View.VISIBLE : View.GONE);
+        mAcceptIncomingCallButton.setVisibility(PermissionsToolsKt.checkPermissions(permissions, this, requestCode) ? View.VISIBLE : View.GONE);
         mAcceptIncomingCallButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -638,18 +639,13 @@ public class VectorCallViewActivity extends RiotAppCompatActivity implements Sen
     }
 
     @Override
-    public void onRequestPermissionsResult(int aRequestCode, @NonNull String[] aPermissions, @NonNull int[] aGrantResults) {
-        if (aRequestCode == mPermissionCode) {
-
-            if (CommonActivityUtils.REQUEST_CODE_PERMISSION_VIDEO_IP_CALL == aRequestCode) {
-                // the user can only accept if the dedicated permissions are granted
-                mAcceptIncomingCallButton.setVisibility(
-                        CommonActivityUtils.onPermissionResultVideoIpCall(this, aPermissions, aGrantResults) ? View.VISIBLE : View.GONE);
-            } else {
-                // the user can only accept if the dedicated permissions are granted
-                mAcceptIncomingCallButton.setVisibility(
-                        CommonActivityUtils.onPermissionResultAudioIpCall(this, aPermissions, aGrantResults) ? View.VISIBLE : View.GONE);
-            }
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == PermissionsToolsKt.PERMISSION_REQUEST_CODE_VIDEO_CALL) {
+            // the user can only accept if the dedicated permissions are granted
+            mAcceptIncomingCallButton.setVisibility(PermissionsToolsKt.onPermissionResultVideoIpCall(this, grantResults) ? View.VISIBLE : View.GONE);
+        } else if (requestCode == PermissionsToolsKt.PERMISSION_REQUEST_CODE_AUDIO_CALL) {
+            // the user can only accept if the dedicated permissions are granted
+            mAcceptIncomingCallButton.setVisibility(PermissionsToolsKt.onPermissionResultAudioIpCall(this, grantResults) ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -1181,13 +1177,13 @@ public class VectorCallViewActivity extends RiotAppCompatActivity implements Sen
             try {
                 mField = PowerManager.class.getClass().getField("PROXIMITY_SCREEN_OFF_WAKE_LOCK").getInt(null);
             } catch (Throwable ignored) {
-                Log.e(LOG_TAG, "## initScreenManagement " + ignored.getMessage());
+                Log.e(LOG_TAG, "## initScreenManagement " + ignored.getMessage(), ignored);
             }
 
             PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
             mWakeLock = powerManager.newWakeLock(mField, getLocalClassName());
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## initScreenManagement() : failed " + e.getMessage());
+            Log.e(LOG_TAG, "## initScreenManagement() : failed " + e.getMessage(), e);
         }
     }
 
@@ -1205,7 +1201,7 @@ public class VectorCallViewActivity extends RiotAppCompatActivity implements Sen
                 mIsScreenOff = true;
             }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## turnScreenOff() failed");
+            Log.e(LOG_TAG, "## turnScreenOff() failed", e);
         }
 
         // set the back light level to the minimum
@@ -1226,7 +1222,7 @@ public class VectorCallViewActivity extends RiotAppCompatActivity implements Sen
                 mWakeLock.release();
             }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## turnScreenOn() failed");
+            Log.e(LOG_TAG, "## turnScreenOn() failed", e);
         }
 
         mIsScreenOff = false;

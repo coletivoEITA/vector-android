@@ -692,9 +692,9 @@ public class VectorRoomMediasSender {
                 try {
                     resizeBitmapStream = ImageUtils.resizeImage(imageStream, -1, (srcImageSize.mWidth + dstImageSize.mWidth - 1) / dstImageSize.mWidth, 75);
                 } catch (OutOfMemoryError ex) {
-                    Log.e(LOG_TAG, "resizeImage out of memory : " + ex.getMessage());
+                    Log.e(LOG_TAG, "resizeImage out of memory : " + ex.getMessage(), ex);
                 } catch (Exception e) {
-                    Log.e(LOG_TAG, "resizeImage failed : " + e.getMessage());
+                    Log.e(LOG_TAG, "resizeImage failed : " + e.getMessage(), e);
                 }
 
                 if (null != resizeBitmapStream) {
@@ -714,7 +714,7 @@ public class VectorRoomMediasSender {
                 ImageUtils.rotateImage(mVectorRoomActivity, imageUrl, rotationAngle, mMediasCache);
             }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "resizeImage " + e.getMessage());
+            Log.e(LOG_TAG, "resizeImage " + e.getMessage(), e);
         }
 
         return imageUrl;
@@ -765,7 +765,7 @@ public class VectorRoomMediasSender {
                 try {
                     BitmapFactory.decodeStream(imageStream, null, options);
                 } catch (OutOfMemoryError e) {
-                    Log.e(LOG_TAG, "sendImageMessage out of memory error : " + e.getMessage());
+                    Log.e(LOG_TAG, "sendImageMessage out of memory error : " + e.getMessage(), e);
                 }
 
                 final ImageCompressionSizes imageSizes = computeImageSizes(options.outWidth, options.outHeight);
@@ -873,7 +873,7 @@ public class VectorRoomMediasSender {
                             .show();
                 }
             } catch (Exception e) {
-                Log.e(LOG_TAG, "sendImageMessage failed " + e.getMessage());
+                Log.e(LOG_TAG, "sendImageMessage failed " + e.getMessage(), e);
             }
         }
 

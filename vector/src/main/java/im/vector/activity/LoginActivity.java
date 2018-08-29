@@ -82,6 +82,7 @@ import im.vector.R;
 import im.vector.RegistrationManager;
 import im.vector.UnrecognizedCertHandler;
 import im.vector.activity.util.RequestCodesKt;
+import im.vector.dialogs.ResourceLimitDialogHelper;
 import im.vector.receiver.VectorRegistrationReceiver;
 import im.vector.receiver.VectorUniversalLinkReceiver;
 import im.vector.repositories.ServerUrlsRepository;
@@ -263,10 +264,12 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                     }
                 }
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## BroadcastReceiver onReceive failed " + e.getMessage());
+                Log.e(LOG_TAG, "## BroadcastReceiver onReceive failed " + e.getMessage(), e);
             }
         }
     };
+
+    private ResourceLimitDialogHelper mResourceLimitDialogHelper;
 
     private boolean mIsWaitingNetworkConnection = false;
 
@@ -372,7 +375,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 goToSplash();
             } else {
                 // detect if the application has already been started
-                if (null == EventStreamService.getInstance()) {
+                if (EventStreamService.getInstance() == null) {
                     Log.d(LOG_TAG, "## onCreate(): goToSplash with credentials but there is no event stream service.");
                     goToSplash();
                 } else {
@@ -443,11 +446,15 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
         mButtonsView = findViewById(R.id.login_actions_bar);
 
         if (isFirstCreation()) {
+            mResourceLimitDialogHelper = new ResourceLimitDialogHelper(this, null);
             mHomeServerText.setText(ServerUrlsRepository.INSTANCE.getLastHomeServerUrl(this));
             mIdentityServerText.setText(ServerUrlsRepository.INSTANCE.getLastIdentityServerUrl(this));
         } else {
-            restoreSavedData(getSavedInstanceState());
+            final Bundle savedInstanceState = getSavedInstanceState();
+            mResourceLimitDialogHelper = new ResourceLimitDialogHelper(this, savedInstanceState);
+            restoreSavedData(savedInstanceState);
         }
+        addToRestorables(mResourceLimitDialogHelper);
 
         // If home server url or identity server url are not the default ones, check the mUseCustomHomeServersCheckbox
         if (!ServerUrlsRepository.INSTANCE.isDefaultHomeServerUrl(this, mHomeServerText.getText().toString())
@@ -711,7 +718,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 registerReceiver(mNetworkReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
                 mIsWaitingNetworkConnection = true;
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## addNetworkStateNotificationListener : " + e.getMessage());
+                Log.e(LOG_TAG, "## addNetworkStateNotificationListener : " + e.getMessage(), e);
             }
         }
     }
@@ -725,7 +732,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 unregisterReceiver(mNetworkReceiver);
                 mIsWaitingNetworkConnection = false;
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## removeNetworkStateNotificationListener : " + e.getMessage());
+                Log.e(LOG_TAG, "## removeNetworkStateNotificationListener : " + e.getMessage(), e);
             }
         }
     }
@@ -864,7 +871,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
             return ((null != session) && session.isAlive());
 
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## Exception: " + e.getMessage());
+            Log.e(LOG_TAG, "## Exception: " + e.getMessage(), e);
         }
 
         Log.e(LOG_TAG, "## hasCredentials() : invalid credentials");
@@ -876,7 +883,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                     // getDefaultSession could trigger an exception if the login data are corrupted
                     CommonActivityUtils.logout(LoginActivity.this);
                 } catch (Exception e) {
-                    Log.w(LOG_TAG, "## Exception: " + e.getMessage());
+                    Log.w(LOG_TAG, "## Exception: " + e.getMessage(), e);
                 }
             }
         });
@@ -1145,13 +1152,16 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
      * @param matrixError the matrix error
      */
     private void onFailureDuringAuthRequest(MatrixError matrixError) {
-        String message = matrixError.getLocalizedMessage();
         enableLoadingScreen(false);
 
-        // detect if it is a Matrix SDK issue
-        String errCode = matrixError.errcode;
+        final String errCode = matrixError.errcode;
 
-        if (null != errCode) {
+        if (MatrixError.RESOURCE_LIMIT_EXCEEDED.equals(errCode)) {
+            Log.e(LOG_TAG, "## onFailureDuringAuthRequest(): RESOURCE_LIMIT_EXCEEDED");
+            mResourceLimitDialogHelper.displayDialog(matrixError);
+        } else {
+            final String message;
+
             if (TextUtils.equals(errCode, MatrixError.FORBIDDEN)) {
                 message = getString(R.string.login_error_forbidden);
             } else if (TextUtils.equals(errCode, MatrixError.UNKNOWN_TOKEN)) {
@@ -1166,11 +1176,13 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 message = getString(R.string.login_error_user_in_use);
             } else if (TextUtils.equals(errCode, MatrixError.LOGIN_EMAIL_URL_NOT_YET)) {
                 message = getString(R.string.login_error_login_email_not_yet);
+            } else {
+                message = matrixError.getLocalizedMessage();
             }
-        }
 
-        Log.e(LOG_TAG, "## onFailureDuringAuthRequest(): Msg= \"" + message + "\"");
-        Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
+            Log.e(LOG_TAG, "## onFailureDuringAuthRequest(): Msg= \"" + message + "\"");
+            Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
+        }
     }
 
     /**
@@ -1368,7 +1380,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 Uri hsUri = Uri.parse(hs);
                 validHomeServer = "http".equals(hsUri.getScheme()) || "https".equals(hsUri.getScheme());
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## Exception: " + e.getMessage());
+                Log.e(LOG_TAG, "## Exception: " + e.getMessage(), e);
             }
 
             if (!validHomeServer) {
@@ -1480,7 +1492,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                                         try {
                                             registrationFlowResponse = JsonUtils.toRegistrationFlowResponse(e.mErrorBodyAsString);
                                         } catch (Exception castExcept) {
-                                            Log.e(LOG_TAG, "JsonUtils.toRegistrationFlowResponse " + castExcept.getLocalizedMessage());
+                                            Log.e(LOG_TAG, "JsonUtils.toRegistrationFlowResponse " + castExcept.getLocalizedMessage(), castExcept);
                                         }
                                     } else if (e.mStatus == 403) {
                                         // not supported by the server
@@ -1697,14 +1709,14 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
 
                 @Override
                 public void onNetworkError(Exception e) {
-                    Log.e(LOG_TAG, "onLoginClick : Network Error: " + e.getMessage());
+                    Log.e(LOG_TAG, "onLoginClick : Network Error: " + e.getMessage(), e);
                     enableLoadingScreen(false);
                     Toast.makeText(getApplicationContext(), getString(R.string.login_error_network_error), Toast.LENGTH_LONG).show();
                 }
 
                 @Override
                 public void onUnexpectedError(Exception e) {
-                    Log.e(LOG_TAG, "onLoginClick : onUnexpectedError" + e.getMessage());
+                    Log.e(LOG_TAG, "onLoginClick : onUnexpectedError" + e.getMessage(), e);
                     enableLoadingScreen(false);
                     String msg = getString(R.string.login_error_unable_login) + " : " + e.getMessage();
                     Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();
@@ -2083,7 +2095,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                         new ArrayList<Fingerprint>(),
                         false);
             } catch (Exception e) {
-                Log.e(LOG_TAG, "getHsConfig fails " + e.getLocalizedMessage());
+                Log.e(LOG_TAG, "getHsConfig fails " + e.getLocalizedMessage(), e);
             }
         }
 
@@ -2404,35 +2416,7 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                     })
                     .show();
         } else {
-            // TODo manage multi accounts
-            Matrix.getInstance(this).getDefaultSession().createDirectMessageRoom("@riot-bot:matrix.org", new ApiCallback<String>() {
-                @Override
-                public void onSuccess(String info) {
-                    Log.d(LOG_TAG, "## onRegistrationSuccess() : succeed to invite riot-bot");
-                }
-
-                private void onError(String error) {
-                    Log.e(LOG_TAG, "## onRegistrationSuccess() : failed  to invite riot-bot " + error);
-                }
-
-                @Override
-                public void onNetworkError(Exception e) {
-                    onError(e.getMessage());
-                }
-
-                @Override
-                public void onMatrixError(MatrixError e) {
-                    onError(e.getMessage());
-                }
-
-                @Override
-                public void onUnexpectedError(Exception e) {
-                    onError(e.getMessage());
-                }
-            });
-
             saveServerUrlsIfCustomValuesHasBeenEntered();
-
             goToSplash();
             finish();
         }
@@ -2512,5 +2496,11 @@ public class LoginActivity extends MXCActionBarActivity implements RegistrationM
                 createAccount();
             }
         }
+    }
+
+    @Override
+    public void onResourceLimitExceeded(MatrixError e) {
+        enableLoadingScreen(false);
+        mResourceLimitDialogHelper.displayDialog(e);
     }
 }
