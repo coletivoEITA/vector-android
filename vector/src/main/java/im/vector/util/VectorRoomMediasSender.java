@@ -111,6 +111,7 @@ public class VectorRoomMediasSender {
     private List<RoomMediaMessage> mSharedDataItems;
     private String mImageCompressionDescription;
     private String mDestinationFolder;
+    private Integer mSendingMedia = 0;
 
     /**
      * Constructor
@@ -171,7 +172,11 @@ public class VectorRoomMediasSender {
         if ((null == mSharedDataItems) || (0 == mSharedDataItems.size())) {
             Log.d(LOG_TAG, "sendMedias : done");
             mImageCompressionDescription = null;
-            mDestinationFolder = null;
+            if (mSendingMedia <= 0) {
+                mDestinationFolder = null;
+            }
+            mSendingMedia--;
+
             mSharedDataItems = null;
 
             mVectorRoomActivity.runOnUiThread(new Runnable() {
@@ -796,6 +801,10 @@ public class VectorRoomMediasSender {
                 }
                 // can be rescaled ?
                 else if (null != imageSizes.mSmallImageSize) {
+                    if (mSendingMedia <= 0) {
+                        mSendingMedia = 2;
+                    }
+
                     isManaged = true;
 
                     FragmentManager fm = mVectorRoomActivity.getSupportFragmentManager();
@@ -882,6 +891,12 @@ public class VectorRoomMediasSender {
             mVectorRoomActivity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    if (!TextUtils.isEmpty(mDestinationFolder)) {
+                        roomMediaMessage.addContentExtra("m.cloud_folder", new JsonPrimitive(mDestinationFolder));
+                        if ((null == mSharedDataItems) || (0 == mSharedDataItems.size())) {
+                            mDestinationFolder = null; // Last media sent!
+                        }
+                    }
                     mVectorMessageListFragment.sendMediaMessage(roomMediaMessage);
                     if (null != aListener) {
                         aListener.onDone();
