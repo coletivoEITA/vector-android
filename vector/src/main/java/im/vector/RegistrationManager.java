@@ -215,6 +215,12 @@ public class RegistrationManager {
                 public void onRegistrationFailed(String message) {
                     listener.onUsernameAvailabilityChecked(!TextUtils.equals(MatrixError.USER_IN_USE, message));
                 }
+
+                @Override
+                public void onResourceLimitExceeded(MatrixError e) {
+                    // Should not happen, consider user is available, registration will fail later on
+                    listener.onUsernameAvailabilityChecked(true);
+                }
             });
         }
     }
@@ -353,6 +359,11 @@ public class RegistrationManager {
                         listener.onRegistrationFailed(message);
                     }
                 }
+
+                @Override
+                public void onResourceLimitExceeded(MatrixError e) {
+                    listener.onResourceLimitExceeded(e);
+                }
             });
         }
     }
@@ -401,6 +412,11 @@ public class RegistrationManager {
                 } else {
                     listener.onRegistrationFailed(message);
                 }
+            }
+
+            @Override
+            public void onResourceLimitExceeded(MatrixError e) {
+                listener.onResourceLimitExceeded(e);
             }
         });
     }
@@ -559,7 +575,7 @@ public class RegistrationManager {
                     publicKey = recaptchaParams.get(JSON_KEY_PUBLIC_KEY);
 
                 } catch (Exception e) {
-                    Log.e(LOG_TAG, "getCaptchaPublicKey: " + e.getLocalizedMessage());
+                    Log.e(LOG_TAG, "getCaptchaPublicKey: " + e.getLocalizedMessage(), e);
                 }
             }
         }
@@ -970,9 +986,11 @@ public class RegistrationManager {
                             RegistrationFlowResponse registrationFlowResponse = JsonUtils.toRegistrationFlowResponse(e.mErrorBodyAsString);
                             setRegistrationFlowResponse(registrationFlowResponse);
                         } catch (Exception castExcept) {
-                            Log.e(LOG_TAG, "JsonUtils.toRegistrationFlowResponse " + castExcept.getLocalizedMessage());
+                            Log.e(LOG_TAG, "JsonUtils.toRegistrationFlowResponse " + castExcept.getLocalizedMessage(), castExcept);
                         }
                         listener.onRegistrationFailed(ERROR_MISSING_STAGE);
+                    } else if (TextUtils.equals(e.errcode, MatrixError.RESOURCE_LIMIT_EXCEEDED)) {
+                        listener.onResourceLimitExceeded(e);
                     } else {
                         listener.onRegistrationFailed("");
                     }
@@ -991,6 +1009,8 @@ public class RegistrationManager {
         void onRegistrationSuccess();
 
         void onRegistrationFailed(String message);
+
+        void onResourceLimitExceeded(MatrixError e);
     }
 
     /*
@@ -1023,5 +1043,7 @@ public class RegistrationManager {
         void onWaitingCaptcha();
 
         void onThreePidRequestFailed(String message);
+
+        void onResourceLimitExceeded(MatrixError e);
     }
 }

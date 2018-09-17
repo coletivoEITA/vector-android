@@ -23,7 +23,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Browser;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AlertDialog;
 import android.text.TextUtils;
@@ -63,6 +64,7 @@ import org.matrix.androidsdk.rest.model.message.Message;
 import org.matrix.androidsdk.rest.model.message.VideoMessage;
 import org.matrix.androidsdk.util.JsonUtils;
 import org.matrix.androidsdk.util.Log;
+import org.matrix.androidsdk.util.PermalinkUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -85,6 +87,7 @@ import im.vector.listeners.IMessagesAdapterActionsListener;
 import im.vector.receiver.VectorUniversalLinkReceiver;
 import im.vector.util.ExternalApplicationsUtilKt;
 import im.vector.util.MatrixSdkExtensionsKt;
+import im.vector.util.PermissionsToolsKt;
 import im.vector.util.PreferencesManager;
 import im.vector.util.SlidableMediaInfo;
 import im.vector.util.ThemeUtils;
@@ -95,25 +98,63 @@ import im.vector.widgets.WidgetsManager;
 public class VectorMessageListFragment extends MatrixMessageListFragment implements IMessagesAdapterActionsListener {
     private static final String LOG_TAG = VectorMessageListFragment.class.getSimpleName();
 
-    public interface IListFragmentEventListener {
-        void onListTouch();
+    // Data to wait for permission
+    private int mPendingMenuAction;
+    private String mPendingMediaUrl;
+    private String mPendingMediaMimeType;
+    private String mPendingFilename;
+    private EncryptedFileInfo mPendingEncryptedFileInfo;
+
+    public interface VectorMessageListFragmentListener {
+        /**
+         * Display a spinner to warn the user that a back pagination is in progress.
+         */
+        void showPreviousEventsLoadingWheel();
+
+        /**
+         * Dismiss the back pagination progress.
+         */
+        void hidePreviousEventsLoadingWheel();
+
+        /**
+         * Display a spinner to warn the user that a forward pagination is in progress.
+         */
+        void showNextEventsLoadingWheel();
+
+        /**
+         * Dismiss the forward pagination progress.
+         */
+        void hideNextEventsLoadingWheel();
+
+        /**
+         * Display a spinner to warn the user that the initialization is in progress.
+         */
+        void showMainLoadingWheel();
+
+        /**
+         * Dismiss the initialization spinner.
+         */
+        void hideMainLoadingWheel();
+
+        /**
+         * User has selected/unselected an event
+         *
+         * @param currentSelectedEvent the current selected event, or null if no event is selected
+         */
+        void onSelectedEventChange(@Nullable Event currentSelectedEvent);
     }
 
     private static final String TAG_FRAGMENT_RECEIPTS_DIALOG = "TAG_FRAGMENT_RECEIPTS_DIALOG";
     private static final String TAG_FRAGMENT_USER_GROUPS_DIALOG = "TAG_FRAGMENT_USER_GROUPS_DIALOG";
 
-    private IListFragmentEventListener mHostActivityListener;
+    @Nullable
+    private VectorMessageListFragmentListener mListener;
 
     // onMediaAction actions
     // private static final int ACTION_VECTOR_SHARE = R.id.ic_action_vector_share;
     private static final int ACTION_VECTOR_FORWARD = R.id.ic_action_vector_forward;
     private static final int ACTION_VECTOR_SAVE = R.id.ic_action_vector_save;
     static final int ACTION_VECTOR_OPEN = 123456;
-
-    // spinners
-    private View mBackProgressView;
-    private View mForwardProgressView;
-    private View mMainProgressView;
 
     private VectorImageGetter mVectorImageGetter;
 
@@ -137,6 +178,15 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
 
         f.setArguments(args);
         return f;
+    }
+
+    /**
+     * Update the listener
+     *
+     * @param listener the new listener
+     */
+    public void setListener(@Nullable VectorMessageListFragmentListener listener) {
+        mListener = listener;
     }
 
     @Override
@@ -185,28 +235,6 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         return getClass().getName() + ".MATRIX_MESSAGE_FRAGMENT_TAG";
     }
 
-    /**
-     * Called when a fragment is first attached to its activity.
-     * {@link #onCreate(Bundle)} will be called after this.
-     *
-     * @param aHostActivity parent activity
-     */
-    @Override
-    public void onAttach(Activity aHostActivity) {
-        super.onAttach(aHostActivity);
-        try {
-            mHostActivityListener = (IListFragmentEventListener) aHostActivity;
-        } catch (ClassCastException e) {
-            // if host activity does not provide the implementation, just ignore it
-            Log.w(LOG_TAG, "## onAttach(): host activity does not implement IListFragmentEventListener " + aHostActivity);
-            mHostActivityListener = null;
-        }
-
-        mBackProgressView = aHostActivity.findViewById(R.id.loading_room_paginate_back_progress);
-        mForwardProgressView = aHostActivity.findViewById(R.id.loading_room_paginate_forward_progress);
-        mMainProgressView = aHostActivity.findViewById(R.id.main_progress_layout);
-    }
-
     @Override
     public void onPause() {
         super.onPause();
@@ -238,18 +266,17 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         });
     }
 
-    /**
-     * Called when the fragment is no longer attached to its activity.  This
-     * is called after {@link #onDestroy()}.
-     */
     @Override
-    public void onDetach() {
-        super.onDetach();
-        mHostActivityListener = null;
-
-        mBackProgressView = null;
-        mForwardProgressView = null;
-        mMainProgressView = null;
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == PermissionsToolsKt.PERMISSION_REQUEST_CODE) {
+            if (PermissionsToolsKt.allGranted(grantResults)) {
+                onMediaAction(mPendingMenuAction, mPendingMediaUrl, mPendingMediaMimeType, mPendingFilename, mPendingEncryptedFileInfo);
+                mPendingMediaUrl = null;
+                mPendingMediaMimeType = null;
+                mPendingFilename = null;
+                mPendingEncryptedFileInfo = null;
+            }
+        }
     }
 
     @Override
@@ -281,10 +308,6 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             mCheckSlideToHide = false;
             MXCActionBarActivity.dismissKeyboard(getActivity());
         }
-
-        // notify host activity
-        if (null != mHostActivityListener)
-            mHostActivityListener.onListTouch();
     }
 
     @Override
@@ -329,6 +352,18 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         if (null != mAdapter) {
             ((VectorMessagesAdapter) mAdapter).cancelSelectionMode();
         }
+    }
+
+    /**
+     * Get the current selected event, or null if no event is selected.
+     */
+    @Nullable
+    public Event getCurrentSelectedEvent() {
+        if (null != mAdapter) {
+            return ((VectorMessagesAdapter) mAdapter).getCurrentSelectedEvent();
+        }
+
+        return null;
     }
 
     private final ApiCallback<Void> mDeviceVerificationCallback = new ApiCallback<Void>() {
@@ -568,12 +603,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                                             }
                                         }
                                     })
-                            .setNegativeButton(R.string.cancel,
-                                    new DialogInterface.OnClickListener() {
-                                        public void onClick(DialogInterface dialog, int id) {
-                                            dialog.cancel();
-                                        }
-                                    })
+                            .setNegativeButton(R.string.cancel, null)
                             .show();
                 }
             });
@@ -594,7 +624,6 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                             .setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                                 @Override
                                 public void onClick(DialogInterface dialog, int which) {
-                                    dialog.dismiss();
                                     mRoom.cancelEventSending(event);
 
                                     getActivity().runOnUiThread(new Runnable() {
@@ -605,12 +634,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                                     });
                                 }
                             })
-                            .setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    dialog.dismiss();
-                                }
-                            })
+                            .setNegativeButton(R.string.no, null)
                             .show();
                 }
             });
@@ -681,7 +705,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 }
             }
         } else if (action == R.id.ic_action_vector_permalink) {
-            VectorUtils.copyToClipboard(getActivity(), VectorUtils.getPermalink(event.roomId, event.eventId));
+            VectorUtils.copyToClipboard(getActivity(), PermalinkUtils.createPermalink(event));
         } else if (action == R.id.ic_action_vector_report) {
             onMessageReport(event);
         } else if ((action == R.id.ic_action_view_source) || (action == R.id.ic_action_view_decrypted_source)) {
@@ -691,7 +715,11 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     View view = getActivity().getLayoutInflater().inflate(R.layout.dialog_event_content, null);
                     TextView textview = view.findViewById(R.id.event_content_text_view);
 
-                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                    Gson gson = new GsonBuilder()
+                            .disableHtmlEscaping()
+                            .setPrettyPrinting()
+                            .create();
+
                     textview.setText(gson.toJson(JsonUtils.toJson((action == R.id.ic_action_view_source) ? event : event.getClearEvent())));
 
                     new AlertDialog.Builder(getActivity())
@@ -734,6 +762,13 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         }
     }
 
+    @Override
+    public void onSelectedEventChange(@Nullable Event currentSelectedEvent) {
+        if (mListener != null && isAdded()) {
+            mListener.onSelectedEventChange(currentSelectedEvent);
+        }
+    }
+
     /**
      * The user reports a content problem to the server
      *
@@ -759,36 +794,23 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                                         .setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                                             @Override
                                             public void onClick(DialogInterface dialog, int which) {
-                                                dialog.dismiss();
-
                                                 List<String> userIdsList = new ArrayList<>();
                                                 userIdsList.add(event.sender);
 
-                                                // TODO Remove cast when SDK accept a List
-                                                mSession.ignoreUsers((ArrayList) userIdsList, new SimpleApiCallback<Void>() {
+                                                mSession.ignoreUsers(userIdsList, new SimpleApiCallback<Void>() {
                                                     @Override
                                                     public void onSuccess(Void info) {
                                                     }
                                                 });
                                             }
                                         })
-                                        .setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
-                                            @Override
-                                            public void onClick(DialogInterface dialog, int which) {
-                                                dialog.dismiss();
-                                            }
-                                        })
+                                        .setNegativeButton(R.string.no, null)
                                         .show();
                             }
                         });
                     }
                 })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.cancel();
-                    }
-                })
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
@@ -805,13 +827,13 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                        final String mediaMimeType,
                        final String filename,
                        final EncryptedFileInfo encryptedFileInfo) {
-        // Santize file name in case `m.body` contains a path.
+        // Sanitize file name in case `m.body` contains a path.
         final String trimmedFileName = new File(filename).getName();
 
-        MXMediasCache mediasCache = Matrix.getInstance(getActivity()).getMediasCache();
+        final MXMediasCache mediasCache = Matrix.getInstance(getActivity()).getMediasCache();
         // check if the media has already been downloaded
         if (mediasCache.isMediaCached(mediaUrl, mediaMimeType)) {
-            mediasCache.createTmpMediaFile(mediaUrl, mediaMimeType, encryptedFileInfo, new SimpleApiCallback<File>() {
+            mediasCache.createTmpDecryptedMediaFile(mediaUrl, mediaMimeType, encryptedFileInfo, new SimpleApiCallback<File>() {
                 @Override
                 public void onSuccess(File file) {
                     // sanity check
@@ -819,39 +841,40 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                         return;
                     }
 
-                    if ((menuAction == ACTION_VECTOR_SAVE) || (menuAction == ACTION_VECTOR_OPEN)) {
-                        CommonActivityUtils.saveMediaIntoDownloads(getActivity(), file, trimmedFileName, mediaMimeType, new SimpleApiCallback<String>() {
-                            @Override
-                            public void onSuccess(String savedMediaPath) {
-                                if (null != savedMediaPath) {
-                                    if (menuAction == ACTION_VECTOR_SAVE) {
-                                        Toast.makeText(getActivity(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
-                                    } else {
-                                        CommonActivityUtils.openMedia(getActivity(), savedMediaPath, mediaMimeType);
+                    if (menuAction == ACTION_VECTOR_SAVE || menuAction == ACTION_VECTOR_OPEN) {
+                        if (PermissionsToolsKt.checkPermissions(PermissionsToolsKt.PERMISSIONS_FOR_WRITING_FILES,
+                                VectorMessageListFragment.this, PermissionsToolsKt.PERMISSION_REQUEST_CODE)) {
+                            CommonActivityUtils.saveMediaIntoDownloads(getActivity(), file, trimmedFileName, mediaMimeType, new SimpleApiCallback<String>() {
+                                @Override
+                                public void onSuccess(String savedMediaPath) {
+                                    if (null != savedMediaPath) {
+                                        if (menuAction == ACTION_VECTOR_SAVE) {
+                                            Toast.makeText(getActivity(), getText(R.string.media_slider_saved), Toast.LENGTH_LONG).show();
+                                        } else {
+                                            ExternalApplicationsUtilKt.openMedia(getActivity(), savedMediaPath, mediaMimeType);
+                                        }
                                     }
                                 }
-                            }
-                        });
-                    } else {
-                        if (null != trimmedFileName) {
-                            File dstFile = new File(file.getParent(), trimmedFileName);
-
-                            if (dstFile.exists()) {
-                                dstFile.delete();
-                            }
-
-                            file.renameTo(dstFile);
-                            file = dstFile;
+                            });
+                        } else {
+                            mPendingMenuAction = menuAction;
+                            mPendingMediaUrl = mediaUrl;
+                            mPendingMediaMimeType = mediaMimeType;
+                            mPendingFilename = filename;
+                            mPendingEncryptedFileInfo = encryptedFileInfo;
                         }
+                    } else {
+                        // Move the file to the Share folder, to avoid it to be deleted because the Activity will be paused while the
+                        // user select an application to share the file
+                        file = mediasCache.moveToShareFolder(file, trimmedFileName);
 
                         // shared / forward
                         Uri mediaUri = null;
                         try {
                             mediaUri = VectorContentProvider.absolutePathToUri(getActivity(), file.getAbsolutePath());
                         } catch (Exception e) {
-                            Log.e(LOG_TAG, "onMediaAction VectorContentProvider.absolutePathToUri: " + e.getMessage());
+                            Log.e(LOG_TAG, "onMediaAction VectorContentProvider.absolutePathToUri: " + e.getMessage(), e);
                         }
-
 
                         if (null != mediaUri) {
                             final Intent sendIntent = new Intent();
@@ -911,40 +934,46 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
         return PreferencesManager.displayAllEvents(getActivity());
     }
 
-    private void setViewVisibility(View view, int visibility) {
-        if ((null != view) && (null != getActivity())) {
-            view.setVisibility(visibility);
+    @Override
+    public void showLoadingBackProgress() {
+        if (mListener != null && isAdded()) {
+            mListener.showPreviousEventsLoadingWheel();
         }
     }
 
     @Override
-    public void showLoadingBackProgress() {
-        setViewVisibility(mBackProgressView, View.VISIBLE);
-    }
-
-    @Override
     public void hideLoadingBackProgress() {
-        setViewVisibility(mBackProgressView, View.GONE);
+        if (mListener != null && isAdded()) {
+            mListener.hidePreviousEventsLoadingWheel();
+        }
     }
 
     @Override
     public void showLoadingForwardProgress() {
-        setViewVisibility(mForwardProgressView, View.VISIBLE);
+        if (mListener != null && isAdded()) {
+            mListener.showNextEventsLoadingWheel();
+        }
     }
 
     @Override
     public void hideLoadingForwardProgress() {
-        setViewVisibility(mForwardProgressView, View.GONE);
+        if (mListener != null && isAdded()) {
+            mListener.hideNextEventsLoadingWheel();
+        }
     }
 
     @Override
     public void showInitLoading() {
-        setViewVisibility(mMainProgressView, View.VISIBLE);
+        if (mListener != null && isAdded()) {
+            mListener.showMainLoadingWheel();
+        }
     }
 
     @Override
     public void hideInitLoading() {
-        setViewVisibility(mMainProgressView, View.GONE);
+        if (mListener != null && isAdded()) {
+            mListener.hideMainLoadingWheel();
+        }
     }
 
     public boolean onRowLongClick(int position) {
@@ -1027,10 +1056,10 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             MessageRow row = mAdapter.getItem(position);
             Event event = row.getEvent();
 
-            // switch in section mode
-            ((VectorMessagesAdapter) mAdapter).onEventTap(event.eventId);
+            // toggle selection mode
+            ((VectorMessagesAdapter) mAdapter).onEventTap(event);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onRowClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onRowClick() failed " + e.getMessage(), e);
         }
     }
 
@@ -1073,11 +1102,11 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     onMediaAction(ACTION_VECTOR_OPEN, fileMessage.getUrl(), fileMessage.getMimeType(), fileMessage.body, fileMessage.file);
                 }
             } else {
-                // switch in section mode
-                vectorMessagesAdapter.onEventTap(event.eventId);
+                // toggle selection mode
+                vectorMessagesAdapter.onEventTap(event);
             }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onContentClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onContentClick() failed " + e.getMessage(), e);
         }
     }
 
@@ -1103,7 +1132,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             roomDetailsIntent.putExtra(VectorMemberDetailsActivity.EXTRA_MATRIX_ID, mSession.getCredentials().userId);
             getActivity().startActivityForResult(roomDetailsIntent, VectorRoomActivity.GET_MENTION_REQUEST_CODE);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onAvatarClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onAvatarClick() failed " + e.getMessage(), e);
         }
     }
 
@@ -1111,7 +1140,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
     public boolean onAvatarLongClick(String userId) {
         if (getActivity() instanceof VectorRoomActivity) {
             try {
-                RoomState state = mRoom.getLiveState();
+                RoomState state = mRoom.getState();
 
                 if (null != state) {
                     String displayName = state.getMemberName(userId);
@@ -1120,7 +1149,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                     }
                 }
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## onAvatarLongClick() failed " + e.getMessage());
+                Log.e(LOG_TAG, "## onAvatarLongClick() failed " + e.getMessage(), e);
             }
         }
         return true;
@@ -1132,7 +1161,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             try {
                 ((VectorRoomActivity) getActivity()).insertUserDisplayNameInTextEditor(displayName);
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## onSenderNameClick() failed " + e.getMessage());
+                Log.e(LOG_TAG, "## onSenderNameClick() failed " + e.getMessage(), e);
             }
         }
     }
@@ -1153,7 +1182,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             fragment = VectorReadReceiptsDialogFragment.newInstance(mSession.getMyUserId(), mRoom.getRoomId(), eventId);
             fragment.show(fm, TAG_FRAGMENT_RECEIPTS_DIALOG);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onMoreReadReceiptClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onMoreReadReceiptClick() failed " + e.getMessage(), e);
         }
     }
 
@@ -1169,7 +1198,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             fragment = VectorUserGroupsDialogFragment.newInstance(mSession.getMyUserId(), userId, groupIds);
             fragment.show(fm, TAG_FRAGMENT_USER_GROUPS_DIALOG);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onGroupFlairClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onGroupFlairClick() failed " + e.getMessage(), e);
         }
     }
 
@@ -1199,7 +1228,7 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
                 }
             }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onURLClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onURLClick() failed " + e.getMessage(), e);
         }
     }
 
@@ -1213,43 +1242,43 @@ public class VectorMessageListFragment extends MatrixMessageListFragment impleme
             roomDetailsIntent.putExtra(VectorMemberDetailsActivity.EXTRA_MATRIX_ID, mSession.getCredentials().userId);
             startActivity(roomDetailsIntent);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onMatrixUserIdClick() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## onMatrixUserIdClick() failed " + e.getMessage(), e);
         }
     }
 
     @Override
     public void onRoomAliasClick(String roomAlias) {
         try {
-            onURLClick(Uri.parse(VectorUtils.getPermalink(roomAlias, null)));
+            onURLClick(Uri.parse(PermalinkUtils.createPermalink(roomAlias)));
         } catch (Exception e) {
-            Log.e(LOG_TAG, "onRoomAliasClick failed " + e.getLocalizedMessage());
+            Log.e(LOG_TAG, "onRoomAliasClick failed " + e.getLocalizedMessage(), e);
         }
     }
 
     @Override
     public void onRoomIdClick(String roomId) {
         try {
-            onURLClick(Uri.parse(VectorUtils.getPermalink(roomId, null)));
+            onURLClick(Uri.parse(PermalinkUtils.createPermalink(roomId)));
         } catch (Exception e) {
-            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage());
+            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage(), e);
         }
     }
 
     @Override
     public void onMessageIdClick(String messageId) {
         try {
-            onURLClick(Uri.parse(VectorUtils.getPermalink(mRoom.getRoomId(), messageId)));
+            onURLClick(Uri.parse(PermalinkUtils.createPermalink(mRoom.getRoomId(), messageId)));
         } catch (Exception e) {
-            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage());
+            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage(), e);
         }
     }
 
     @Override
     public void onGroupIdClick(String groupId) {
         try {
-            onURLClick(Uri.parse(VectorUtils.getPermalink(groupId, null)));
+            onURLClick(Uri.parse(PermalinkUtils.createPermalink(groupId)));
         } catch (Exception e) {
-            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage());
+            Log.e(LOG_TAG, "onRoomIdClick failed " + e.getLocalizedMessage(), e);
         }
     }
 

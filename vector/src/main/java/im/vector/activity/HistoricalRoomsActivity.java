@@ -63,7 +63,7 @@ import kotlin.Pair;
 /**
  * Displays the historical rooms list
  */
-public class HistoricalRoomsActivity extends RiotAppCompatActivity implements
+public class HistoricalRoomsActivity extends VectorAppCompatActivity implements
         SearchView.OnQueryTextListener,
         HomeRoomAdapter.OnSelectRoomListener,
         AbsAdapter.MoreRoomActionListener,
@@ -81,9 +81,6 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements
 
     @BindView(R.id.historical_toolbar)
     Toolbar mToolbar;
-
-    @BindView(R.id.historical_waiting_view)
-    View waitingView;
 
     // historical adapter
     private HomeRoomAdapter mHistoricalAdapter;
@@ -167,6 +164,9 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements
      */
 
     private void initViews() {
+        // Waiting View
+        setWaitingView(findViewById(R.id.historical_waiting_view));
+
         // Toolbar
         setSupportActionBar(mToolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -274,7 +274,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements
                     try {
                         Collections.sort(historicalRooms, RoomUtils.getHistoricalRoomsComparator(mSession, false));
                     } catch (Exception e) {
-                        Log.e(LOG_TAG, "## initHistoricalRoomsData() : sort failed " + e.getMessage());
+                        Log.e(LOG_TAG, "## initHistoricalRoomsData() : sort failed " + e.getMessage(), e);
                     }
                 }
                 return null;
@@ -290,7 +290,7 @@ public class HistoricalRoomsActivity extends RiotAppCompatActivity implements
             task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             mSortingAsyncTasks.add(task);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## initHistoricalRoomsData() failed " + e.getMessage());
+            Log.e(LOG_TAG, "## initHistoricalRoomsData() failed " + e.getMessage(), e);
             task.cancel(true);
         }
     }

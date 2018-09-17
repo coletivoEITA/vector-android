@@ -21,6 +21,9 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.widget.ImageView;
+
+import com.bumptech.glide.Glide;
 
 import org.jetbrains.annotations.NotNull;
 import org.matrix.androidsdk.MXSession;
@@ -34,10 +37,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import butterknife.BindView;
 import im.vector.ErrorListener;
 import im.vector.Matrix;
 import im.vector.R;
 import im.vector.VectorApp;
+import im.vector.analytics.TrackingEvent;
 import im.vector.gcm.GcmRegistrationManager;
 import im.vector.receiver.VectorUniversalLinkReceiver;
 import im.vector.services.EventStreamService;
@@ -60,6 +65,13 @@ public class SplashActivity extends MXCActionBarActivity {
 
     private static final String NEED_TO_CLEAR_CACHE_BEFORE_81200 = "NEED_TO_CLEAR_CACHE_BEFORE_81200";
 
+    /* ==========================================================================================
+     * UI
+     * ========================================================================================== */
+
+    @BindView(R.id.animated_logo_image_view)
+    ImageView animatedLogo;
+
     /**
      * @return true if a store is corrupted.
      */
@@ -80,6 +92,10 @@ public class SplashActivity extends MXCActionBarActivity {
      */
     private void onFinish() {
         Log.e(LOG_TAG, "##onFinish() : start VectorHomeActivity");
+        final long finishTime = System.currentTimeMillis();
+        final long duration = finishTime - mLaunchTime;
+        final TrackingEvent event = new TrackingEvent.LaunchScreen(duration);
+        VectorApp.getInstance().getAnalytics().trackEvent(event);
 
         if (!hasCorruptedStore()) {
             // Go to the home page
@@ -155,6 +171,11 @@ public class SplashActivity extends MXCActionBarActivity {
             return;
         }
 
+        // Load the Gif logo
+        Glide.with(this)
+                .load(R.drawable.riot_splash)
+                .into(animatedLogo);
+
         List<String> matrixIds = new ArrayList<>();
 
         for (final MXSession session : sessions) {
@@ -194,14 +215,12 @@ public class SplashActivity extends MXCActionBarActivity {
                 // should be called if the application was already initialized
                 @Override
                 public void onLiveEventsChunkProcessed(String fromToken, String toToken) {
-                    super.onLiveEventsChunkProcessed(fromToken, toToken);
                     onReady();
                 }
 
                 // first application launched
                 @Override
                 public void onInitialSyncComplete(String toToken) {
-                    super.onInitialSyncComplete(toToken);
                     onReady();
                 }
             };
@@ -245,7 +264,7 @@ public class SplashActivity extends MXCActionBarActivity {
         // trigger the GCM registration if required
         GcmRegistrationManager gcmRegistrationManager = Matrix.getInstance(getApplicationContext()).getSharedGCMRegistrationManager();
 
-        if (!gcmRegistrationManager.isGCMRegistred()) {
+        if (!gcmRegistrationManager.isGcmRegistered()) {
             gcmRegistrationManager.checkRegistrations();
         } else {
             gcmRegistrationManager.forceSessionsRegistration(null);

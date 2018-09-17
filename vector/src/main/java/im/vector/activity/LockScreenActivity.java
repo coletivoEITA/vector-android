@@ -51,7 +51,7 @@ import kotlin.Pair;
 /**
  * LockScreenActivity is displayed within the notification to send a message without opening the application.
  */
-public class LockScreenActivity extends RiotAppCompatActivity { // do NOT extend from UC*Activity, we do not want to login on this screen!
+public class LockScreenActivity extends VectorAppCompatActivity { // do NOT extend from UC*Activity, we do not want to login on this screen!
     private static final String LOG_TAG = LockScreenActivity.class.getSimpleName();
 
     public static final String EXTRA_SENDER_NAME = "extra_sender_name";
@@ -183,7 +183,7 @@ public class LockScreenActivity extends RiotAppCompatActivity { // do NOT extend
 
                     @Override
                     public void onNetworkError(Exception e) {
-                        Log.d(LOG_TAG, "Send message : onNetworkError " + e.getMessage());
+                        Log.d(LOG_TAG, "Send message : onNetworkError " + e.getMessage(), e);
                         Toast.makeText(LockScreenActivity.this, e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
                     }
 
@@ -200,7 +200,7 @@ public class LockScreenActivity extends RiotAppCompatActivity { // do NOT extend
 
                     @Override
                     public void onUnexpectedError(Exception e) {
-                        Log.d(LOG_TAG, "Send message : onUnexpectedError " + e.getMessage());
+                        Log.d(LOG_TAG, "Send message : onUnexpectedError " + e.getMessage(), e);
                         Toast.makeText(LockScreenActivity.this, e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });

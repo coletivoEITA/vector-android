@@ -45,7 +45,7 @@ import im.vector.R;
  * FallbackLoginActivity is the fallback login activity
  * i.e this activity is created when the client does not support the
  */
-public class FallbackLoginActivity extends RiotAppCompatActivity {
+public class FallbackLoginActivity extends VectorAppCompatActivity {
     private static final String LOG_TAG = FallbackLoginActivity.class.getSimpleName();
 
     public static final String EXTRA_HOME_SERVER_ID = "FallbackLoginActivity.EXTRA_HOME_SERVER_ID";
@@ -90,7 +90,7 @@ public class FallbackLoginActivity extends RiotAppCompatActivity {
             try {
                 cookieManager.removeAllCookie();
             } catch (Exception e) {
-                Log.e(LOG_TAG, " cookieManager.removeAllCookie() fails " + e.getLocalizedMessage());
+                Log.e(LOG_TAG, " cookieManager.removeAllCookie() fails " + e.getLocalizedMessage(), e);
             }
             launchWebView();
         } else {
@@ -102,7 +102,7 @@ public class FallbackLoginActivity extends RiotAppCompatActivity {
                     }
                 });
             } catch (Exception e) {
-                Log.e(LOG_TAG, " cookieManager.removeAllCookie() fails " + e.getLocalizedMessage());
+                Log.e(LOG_TAG, " cookieManager.removeAllCookie() fails " + e.getLocalizedMessage(), e);
                 launchWebView();
             }
         }
@@ -191,7 +191,7 @@ public class FallbackLoginActivity extends RiotAppCompatActivity {
                         }.getType());
 
                     } catch (Exception e) {
-                        Log.e(LOG_TAG, "## shouldOverrideUrlLoading() : fromJson failed " + e.getMessage());
+                        Log.e(LOG_TAG, "## shouldOverrideUrlLoading() : fromJson failed " + e.getMessage(), e);
                     }
 
                     // succeeds to parse parameters
@@ -228,7 +228,7 @@ public class FallbackLoginActivity extends RiotAppCompatActivity {
                                 }
                             }
                         } catch (Exception e) {
-                            Log.e(LOG_TAG, "## shouldOverrideUrlLoading() : failed " + e.getMessage());
+                            Log.e(LOG_TAG, "## shouldOverrideUrlLoading() : failed " + e.getMessage(), e);
                         }
                     }
                     return true;

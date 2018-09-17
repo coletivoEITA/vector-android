@@ -217,7 +217,7 @@ public class KeyRequestHandler {
                         try {
                             req.mShare.run();
                         } catch (Exception e) {
-                            Log.e(LOG_TAG, "## onDisplayKeyShareDialogClose() : req.mShare failed " + e.getMessage());
+                            Log.e(LOG_TAG, "## onDisplayKeyShareDialogClose() : req.mShare failed " + e.getMessage(), e);
                         }
                     }
                 }
@@ -227,7 +227,7 @@ public class KeyRequestHandler {
                         try {
                             req.mIgnore.run();
                         } catch (Exception e) {
-                            Log.e(LOG_TAG, "## onDisplayKeyShareDialogClose() : req.mIgnore failed " + e.getMessage());
+                            Log.e(LOG_TAG, "## onDisplayKeyShareDialogClose() : req.mIgnore failed " + e.getMessage(), e);
                         }
                     }
                 }
@@ -334,27 +334,22 @@ public class KeyRequestHandler {
                 .setNegativeButton(R.string.ignore_request, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
                         onDisplayKeyShareDialogClose(false, true);
-
                     }
                 })
                 .setNeutralButton(R.string.share_without_verifying,
                         new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
-                                dialog.dismiss();
                                 onDisplayKeyShareDialogClose(true, false);
                             }
                         })
                 .setPositiveButton(R.string.start_verification,
                         new DialogInterface.OnClickListener() {
                             public void onClick(final DialogInterface dialog, int id) {
-                                dialog.dismiss();
                                 CommonActivityUtils.displayDeviceVerificationDialog(deviceInfo, mCurrentUser, session, activity, new SimpleApiCallback<Void>() {
                                     @Override
                                     public void onSuccess(Void info) {
                                         if (deviceInfo.isVerified()) {
-                                            dialog.dismiss();
                                             onDisplayKeyShareDialogClose(true, false);
                                         } else {
                                             displayKeyShareDialog(session, deviceInfo, wasNewDevice);

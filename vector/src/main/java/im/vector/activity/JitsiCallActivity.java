@@ -47,7 +47,7 @@ import im.vector.widgets.Widget;
 import im.vector.widgets.WidgetsManager;
 import kotlin.Pair;
 
-public class JitsiCallActivity extends RiotAppCompatActivity {
+public class JitsiCallActivity extends VectorAppCompatActivity {
     private static final String LOG_TAG = JitsiCallActivity.class.getSimpleName();
 
     /**
@@ -95,9 +95,6 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
     @BindView(R.id.jsti_connecting_text_view)
     View mConnectingTextView;
 
-    @BindView(R.id.jitsi_progress_layout)
-    View waitingView;
-
     /**
      * Widget events listener
      */
@@ -126,6 +123,9 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
     @Override
     @SuppressLint("NewApi")
     public void initUiAndData() {
+        // Waiting View
+        setWaitingView(findViewById(R.id.jitsi_progress_layout));
+
         mWidget = (Widget) getIntent().getSerializableExtra(EXTRA_WIDGET_ID);
         mIsVideoCall = getIntent().getBooleanExtra(EXTRA_ENABLE_VIDEO, true);
 
@@ -134,7 +134,7 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
             String confId = uri.getQueryParameter("confId");
             mCallUrl = JITSI_SERVER_URL + confId;
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## onCreate() failed : " + e.getMessage());
+            Log.e(LOG_TAG, "## onCreate() failed : " + e.getMessage(), e);
             finish();
             return;
         }
@@ -232,7 +232,7 @@ public class JitsiCallActivity extends RiotAppCompatActivity {
             urlObject.putString("url", mCallUrl);
             mJitsiView.loadURLObject(urlObject);
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## loadURL() failed : " + e.getMessage());
+            Log.e(LOG_TAG, "## loadURL() failed : " + e.getMessage(), e);
             finish();
         }
 

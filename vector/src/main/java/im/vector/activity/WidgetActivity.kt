@@ -47,7 +47,7 @@ import org.matrix.androidsdk.util.Log
 /*
  * This class displays a widget
  */
-class WidgetActivity : RiotAppCompatActivity() {
+class WidgetActivity : VectorAppCompatActivity() {
 
     // the linked widget
     private var mWidget: Widget? = null
@@ -164,7 +164,6 @@ class WidgetActivity : RiotAppCompatActivity() {
         AlertDialog.Builder(this)
                 .setMessage(R.string.widget_delete_message_confirmation)
                 .setPositiveButton(R.string.remove) { dialog, which ->
-                    dialog.dismiss()
                     showWaitingView()
                     WidgetsManager.getSharedInstance().closeWidget(mSession, mRoom, mWidget!!.widgetId, object : ApiCallback<Void> {
                         override fun onSuccess(info: Void?) {
@@ -190,7 +189,7 @@ class WidgetActivity : RiotAppCompatActivity() {
                         }
                     })
                 }
-                .setNegativeButton(R.string.cancel) { dialog, which -> dialog.dismiss() }
+                .setNegativeButton(R.string.cancel, null)
                 .show()
     }
 

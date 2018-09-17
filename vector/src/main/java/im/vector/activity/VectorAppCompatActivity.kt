@@ -42,7 +42,7 @@ import org.matrix.androidsdk.util.Log
 /**
  * Parent class for all Activities in Vector application
  */
-abstract class RiotAppCompatActivity : AppCompatActivity() {
+abstract class VectorAppCompatActivity : AppCompatActivity() {
 
     /* ==========================================================================================
      * DATA
@@ -210,6 +210,12 @@ abstract class RiotAppCompatActivity : AppCompatActivity() {
     //==============================================================================================
 
     var waitingView: View? = null
+        set(value) {
+            field = value
+
+            // Ensure this view is clickable to catch UI events
+            value?.isClickable = true
+        }
 
     /**
      * Tells if the waiting view is currently displayed

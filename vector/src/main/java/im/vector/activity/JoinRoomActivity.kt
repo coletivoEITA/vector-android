@@ -31,7 +31,7 @@ import org.matrix.androidsdk.util.Log
 /**
  * JoinRoomActivity is a dummy activity to join / reject a room invitation
  */
-class JoinRoomActivity : RiotAppCompatActivity() {
+class JoinRoomActivity : VectorAppCompatActivity() {
 
     override fun getLayoutRes() = R.layout.activity_empty
 
@@ -84,7 +84,7 @@ class JoinRoomActivity : RiotAppCompatActivity() {
                 }
 
                 override fun onNetworkError(e: Exception) {
-                    Log.e(LOG_TAG, "## onCreate() : join fails " + e.message)
+                    Log.e(LOG_TAG, "## onCreate() : join fails " + e.message, e)
                 }
 
                 override fun onMatrixError(e: MatrixError) {
@@ -92,7 +92,7 @@ class JoinRoomActivity : RiotAppCompatActivity() {
                 }
 
                 override fun onUnexpectedError(e: Exception) {
-                    Log.e(LOG_TAG, "## onCreate() : join fails " + e.message)
+                    Log.e(LOG_TAG, "## onCreate() : join fails " + e.message, e)
                 }
             })
         } else if (reject) {
@@ -104,7 +104,7 @@ class JoinRoomActivity : RiotAppCompatActivity() {
                 }
 
                 override fun onNetworkError(e: Exception) {
-                    Log.e(LOG_TAG, "## onCreate() : reject fails " + e.message)
+                    Log.e(LOG_TAG, "## onCreate() : reject fails " + e.message, e)
                 }
 
                 override fun onMatrixError(e: MatrixError) {
@@ -112,7 +112,7 @@ class JoinRoomActivity : RiotAppCompatActivity() {
                 }
 
                 override fun onUnexpectedError(e: Exception) {
-                    Log.e(LOG_TAG, "## onCreate() : reject fails " + e.message)
+                    Log.e(LOG_TAG, "## onCreate() : reject fails " + e.message, e)
                 }
             })
         }

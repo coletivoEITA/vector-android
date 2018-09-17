@@ -66,6 +66,7 @@ import im.vector.adapters.VectorMemberDetailsDevicesAdapter;
 import im.vector.fragments.VectorUnknownDevicesFragment;
 import im.vector.util.CallsManager;
 import im.vector.util.MatrixSdkExtensionsKt;
+import im.vector.util.PermissionsToolsKt;
 import im.vector.util.VectorUtils;
 import kotlin.Pair;
 
@@ -296,7 +297,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             @Override
             public void onNetworkError(Exception e) {
                 Toast.makeText(VectorMemberDetailsActivity.this, e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
-                Log.e(LOG_TAG, "## startCall() failed " + e.getMessage());
+                Log.e(LOG_TAG, "## startCall() failed " + e.getMessage(), e);
             }
 
             @Override
@@ -326,7 +327,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             @Override
             public void onUnexpectedError(Exception e) {
                 Toast.makeText(VectorMemberDetailsActivity.this, e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
-                Log.e(LOG_TAG, "## startCall() failed " + e.getMessage());
+                Log.e(LOG_TAG, "## startCall() failed " + e.getMessage(), e);
             }
         });
     }
@@ -340,27 +341,29 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
      * @param aIsVideoCall true if video call, false if audio call
      */
     private void startCheckCallPermissions(boolean aIsVideoCall) {
-        int requestCode = CommonActivityUtils.REQUEST_CODE_PERMISSION_AUDIO_IP_CALL;
+        final int requestCode;
 
         if (aIsVideoCall) {
-            requestCode = CommonActivityUtils.REQUEST_CODE_PERMISSION_VIDEO_IP_CALL;
+            requestCode = PermissionsToolsKt.PERMISSION_REQUEST_CODE_VIDEO_CALL;
+        } else {
+            requestCode = PermissionsToolsKt.PERMISSION_REQUEST_CODE_AUDIO_CALL;
         }
 
-        if (CommonActivityUtils.checkPermissions(requestCode, this)) {
+        if (PermissionsToolsKt.checkPermissions(requestCode, this, requestCode)) {
             startCall(aIsVideoCall);
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int aRequestCode, @NonNull String[] aPermissions, @NonNull int[] aGrantResults) {
-        if (0 == aPermissions.length) {
-            Log.e(LOG_TAG, "## onRequestPermissionsResult(): cancelled " + aRequestCode);
-        } else if (aRequestCode == CommonActivityUtils.REQUEST_CODE_PERMISSION_AUDIO_IP_CALL) {
-            if (CommonActivityUtils.onPermissionResultAudioIpCall(this, aPermissions, aGrantResults)) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (0 == permissions.length) {
+            Log.d(LOG_TAG, "## onRequestPermissionsResult(): cancelled " + requestCode);
+        } else if (requestCode == PermissionsToolsKt.PERMISSION_REQUEST_CODE_AUDIO_CALL) {
+            if (PermissionsToolsKt.onPermissionResultAudioIpCall(this, grantResults)) {
                 startCall(false);
             }
-        } else if (aRequestCode == CommonActivityUtils.REQUEST_CODE_PERMISSION_VIDEO_IP_CALL) {
-            if (CommonActivityUtils.onPermissionResultVideoIpCall(this, aPermissions, aGrantResults)) {
+        } else if (requestCode == PermissionsToolsKt.PERMISSION_REQUEST_CODE_VIDEO_CALL) {
+            if (PermissionsToolsKt.onPermissionResultVideoIpCall(this, grantResults)) {
                 startCall(true);
             }
         }
@@ -388,8 +391,6 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             return;
         }
 
-        final List<String> idsList = new ArrayList<>();
-
         String displayName = (null == mRoomMember) ?
                 mMemberId : (TextUtils.isEmpty(mRoomMember.displayname) ? mRoomMember.getUserId() : mRoomMember.displayname);
 
@@ -407,21 +408,11 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
                             public void onClick(DialogInterface dialog, int which) {
                                 Log.d(LOG_TAG, "## performItemAction(): Start new room - start chat");
 
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
-                                        mSession.createDirectMessageRoom(mMemberId, mCreateDirectMessageCallBack);
-                                    }
-                                });
+                                enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
+                                mSession.createDirectMessageRoom(mMemberId, mCreateDirectMessageCallBack);
                             }
                         })
-                        .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                // nothing to do
-                            }
-                        })
+                        .setNegativeButton(R.string.cancel, null)
                         .show();
                 break;
 
@@ -464,7 +455,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
             case ITEM_ACTION_SET_DEFAULT_POWER_LEVEL:
                 if (null != mRoom) {
                     int defaultPowerLevel = 0;
-                    PowerLevels powerLevels = mRoom.getLiveState().getPowerLevels();
+                    PowerLevels powerLevels = mRoom.getState().getPowerLevels();
 
                     if (null != powerLevels) {
                         defaultPowerLevel = powerLevels.users_default;
@@ -501,12 +492,14 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
             case ITEM_ACTION_IGNORE: {
                 new AlertDialog.Builder(this)
-                        .setMessage(getString(R.string.room_participants_action_ignore) + " ?")
+                        .setMessage(R.string.room_event_action_report_prompt_ignore_user)
                         .setCancelable(false)
                         .setPositiveButton(R.string.ok,
                                 new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int id) {
                                         enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
+
+                                        final List<String> idsList = new ArrayList<>();
 
                                         if (null != mRoomMember) {
                                             idsList.add(mRoomMember.getUserId());
@@ -516,8 +509,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
                                         if (0 != idsList.size()) {
                                             enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
-                                            // TODO Remove cast
-                                            mSession.ignoreUsers((ArrayList) idsList, new ApiCallback<Void>() {
+                                            mSession.ignoreUsers(idsList, new ApiCallback<Void>() {
                                                 @Override
                                                 public void onSuccess(Void info) {
                                                     // do not hide the progress bar to warn the user that something is pending
@@ -544,12 +536,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
                                         }
                                     }
                                 })
-                        .setNegativeButton(R.string.cancel,
-                                new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int id) {
-                                        dialog.cancel();
-                                    }
-                                })
+                        .setNegativeButton(R.string.cancel, null)
                         .show();
 
                 break;
@@ -557,12 +544,12 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
             case ITEM_ACTION_UNIGNORE: {
                 new AlertDialog.Builder(this)
-                        .setMessage(getString(R.string.room_participants_action_unignore) + " ?")
+                        .setMessage(R.string.room_participants_action_unignore_prompt)
                         .setCancelable(false)
                         .setPositiveButton(R.string.ok,
                                 new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int id) {
-                                        enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
+                                        final List<String> idsList = new ArrayList<>();
 
                                         if (null != mRoomMember) {
                                             idsList.add(mRoomMember.getUserId());
@@ -572,8 +559,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
 
                                         if (0 != idsList.size()) {
                                             enableProgressBarView(CommonActivityUtils.UTILS_DISPLAY_PROGRESS_BAR);
-                                            // TODO Remove cast when SDK will accept List
-                                            mSession.unIgnoreUsers((ArrayList) idsList, new ApiCallback<Void>() {
+                                            mSession.unIgnoreUsers(idsList, new ApiCallback<Void>() {
                                                 @Override
                                                 public void onSuccess(Void info) {
                                                     // do not hide the progress bar to warn the user that something is pending
@@ -600,12 +586,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
                                         }
                                     }
                                 })
-                        .setNegativeButton(R.string.cancel,
-                                new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int id) {
-                                        dialog.cancel();
-                                    }
-                                })
+                        .setNegativeButton(R.string.cancel, null)
                         .show();
                 break;
             }
@@ -746,7 +727,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
      * @param callback      the callback with the created event
      */
     private void updateUserPowerLevels(final String userId, final int newPowerLevel, final ApiCallback<Void> callback) {
-        PowerLevels powerLevels = mRoom.getLiveState().getPowerLevels();
+        PowerLevels powerLevels = mRoom.getState().getPowerLevels();
         int currentSelfPowerLevel = 0;
 
         if (null != powerLevels) {
@@ -760,16 +741,10 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
                     .setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            dialog.dismiss();
                             mRoom.updateUserPowerLevels(userId, newPowerLevel, callback);
                         }
                     })
-                    .setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            dialog.dismiss();
-                        }
-                    })
+                    .setNegativeButton(R.string.no, null)
                     .show();
         } else {
             mRoom.updateUserPowerLevels(userId, newPowerLevel, callback);
@@ -826,7 +801,7 @@ public class VectorMemberDetailsActivity extends MXCActionBarActivity implements
         int adminCount = 0;
 
         if (null != mRoom) {
-            powerLevels = mRoom.getLiveState().getPowerLevels();
+            powerLevels = mRoom.getState().getPowerLevels();
         }
 
         mMemberAvatarBadgeImageView.setVisibility(View.GONE);

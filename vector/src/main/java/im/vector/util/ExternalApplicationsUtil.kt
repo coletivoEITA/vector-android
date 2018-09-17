@@ -17,6 +17,7 @@
 package im.vector.util
 
 import android.app.Activity
+import android.app.Fragment
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Context
@@ -28,6 +29,7 @@ import android.provider.MediaStore
 import androidx.core.widget.toast
 import im.vector.R
 import org.matrix.androidsdk.util.Log
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -78,17 +80,30 @@ fun openSoundRecorder(activity: Activity, requestCode: Int) {
 /**
  * Open file selection activity
  */
-fun openFileSelection(activity: Activity, requestCode: Int) {
-    val fileIntent = Intent(Intent.ACTION_GET_CONTENT)
+fun openFileSelection(activity: Activity,
+                      fragment: Fragment?,
+                      allowMultipleSelection: Boolean,
+                      requestCode: Int) {
+    val fileIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        Intent(Intent.ACTION_OPEN_DOCUMENT)
+    } else {
+        Intent(Intent.ACTION_GET_CONTENT)
+    }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-        fileIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        fileIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultipleSelection)
     }
+
+    fileIntent.addCategory(Intent.CATEGORY_OPENABLE);
 
     fileIntent.type = "*/*"
 
     try {
-        activity.startActivityForResult(fileIntent, requestCode)
+        fragment
+                ?.startActivityForResult(fileIntent, requestCode)
+                ?: run {
+                    activity.startActivityForResult(fileIntent, requestCode)
+                }
     } catch (activityNotFoundException: ActivityNotFoundException) {
         activity.toast(R.string.error_no_external_application_found)
     }
@@ -135,9 +150,9 @@ fun openCamera(activity: Activity, titlePrefix: String, requestCode: Int): Strin
         }
     } catch (uoe: UnsupportedOperationException) {
         Log.e(LOG_TAG, "Unable to insert camera URI into MediaStore.Images.Media.EXTERNAL_CONTENT_URI"
-                + " - no SD card? Attempting to insert into device storage.")
+                + " - no SD card? Attempting to insert into device storage.", uoe)
     } catch (e: Exception) {
-        Log.e(LOG_TAG, "Unable to insert camera URI into MediaStore.Images.Media.EXTERNAL_CONTENT_URI. $e")
+        Log.e(LOG_TAG, "Unable to insert camera URI into MediaStore.Images.Media.EXTERNAL_CONTENT_URI. $e", e)
     }
 
     if (null == dummyUri) {
@@ -148,7 +163,7 @@ fun openCamera(activity: Activity, titlePrefix: String, requestCode: Int): Strin
             }
 
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Unable to insert camera URI into internal storage. Giving up. $e")
+            Log.e(LOG_TAG, "Unable to insert camera URI into internal storage. Giving up. $e", e)
         }
     }
 
@@ -176,3 +191,53 @@ fun openCamera(activity: Activity, titlePrefix: String, requestCode: Int): Strin
 
     return null
 }
+
+/**
+ * Send an email to address with optional subject and message
+ */
+fun sendMailTo(address: String, subject: String? = null, message: String? = null, activity: Activity) {
+    val intent = Intent(Intent.ACTION_SENDTO, Uri.fromParts(
+            "mailto", address, null))
+    intent.putExtra(Intent.EXTRA_SUBJECT, subject)
+    intent.putExtra(Intent.EXTRA_TEXT, message)
+
+    try {
+        activity.startActivity(intent)
+    } catch (activityNotFoundException: ActivityNotFoundException) {
+        activity.toast(R.string.error_no_external_application_found)
+    }
+}
+
+/**
+ * Open an arbitrary uri
+ */
+fun openUri(activity: Activity, uri: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+
+    try {
+        activity.startActivity(intent)
+    } catch (activityNotFoundException: ActivityNotFoundException) {
+        activity.toast(R.string.error_no_external_application_found)
+    }
+}
+
+/**
+ * Send media to a third party application.
+ *
+ * @param activity       the activity
+ * @param savedMediaPath the media path
+ * @param mimeType       the media mime type.
+ */
+fun openMedia(activity: Activity, savedMediaPath: String, mimeType: String) {
+    val file = File(savedMediaPath)
+    val intent = Intent(Intent.ACTION_VIEW)
+
+    intent.setDataAndType(Uri.fromFile(file), mimeType)
+
+    try {
+        activity.startActivity(intent)
+    } catch (activityNotFoundException: ActivityNotFoundException) {
+        activity.toast(R.string.error_no_external_application_found)
+    }
+}
+

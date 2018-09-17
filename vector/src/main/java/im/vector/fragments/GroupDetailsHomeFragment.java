@@ -32,7 +32,6 @@ import org.matrix.androidsdk.rest.model.group.Group;
 
 import butterknife.BindView;
 import im.vector.R;
-import im.vector.activity.CommonActivityUtils;
 import im.vector.util.ThemeUtils;
 import im.vector.util.VectorImageGetter;
 import im.vector.util.VectorUtils;
@@ -130,6 +129,10 @@ public class GroupDetailsHomeFragment extends GroupDetailsBaseFragment {
 
     @Override
     public void refreshViews() {
+        if (!isAdded()) {
+            return;
+        }
+
         Group group = mActivity.getGroup();
 
         VectorUtils.loadGroupAvatar(mActivity, mSession, mGroupAvatar, group);
@@ -142,8 +145,8 @@ public class GroupDetailsHomeFragment extends GroupDetailsBaseFragment {
         int roomCount = (null != group.getGroupRooms()) ? group.getGroupRooms().getEstimatedRoomCount() : 0;
         int memberCount = (null != group.getGroupUsers()) ? group.getGroupUsers().getEstimatedUsersCount() : 1;
 
-        mGroupRoomsTextView.setText((1 == roomCount) ? getString(R.string.group_one_room) : getString(R.string.group_rooms, roomCount));
-        mGroupMembersTextView.setText((1 == memberCount) ? getString(R.string.group_one_member) : getString(R.string.group_members, memberCount));
+        mGroupRoomsTextView.setText(getResources().getQuantityString(R.plurals.group_rooms, roomCount, roomCount));
+        mGroupMembersTextView.setText(getResources().getQuantityString(R.plurals.group_members, memberCount, memberCount));
 
         if (!TextUtils.isEmpty(group.getLongDescription())) {
             mGroupHtmlTextView.setVisibility(View.VISIBLE);

@@ -34,7 +34,7 @@ import im.vector.R;
 /**
  * Dummy activity used to manage the shared
  */
-public class VectorSharedFilesActivity extends RiotAppCompatActivity {
+public class VectorSharedFilesActivity extends VectorAppCompatActivity {
     private static final String LOG_TAG = VectorSharedFilesActivity.class.getSimpleName();
 
     private final String SHARED_FOLDER = "VectorShared";
@@ -69,7 +69,7 @@ public class VectorSharedFilesActivity extends RiotAppCompatActivity {
                         isLaunched = session.getDataHandler().getStore().isReady();
                     }
                 } catch (Exception e) {
-                    Log.e(LOG_TAG, "## onCreate() : failed " + e.getMessage());
+                    Log.e(LOG_TAG, "## onCreate() : failed " + e.getMessage(), e);
                 }
 
                 // go to the home screen if the application is launched

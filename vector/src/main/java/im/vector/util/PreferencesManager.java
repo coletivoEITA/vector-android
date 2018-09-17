@@ -27,6 +27,7 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
+import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
 import org.matrix.androidsdk.util.Log;
@@ -138,6 +139,8 @@ public class PreferencesManager {
     // Analytics keys (Piwik, Matomo, etc.)
     public static final String SETTINGS_USE_ANALYTICS_KEY = "SETTINGS_USE_ANALYTICS_KEY";
 
+    private static final String SETTINGS_PREVIEW_MEDIA_BEFORE_SENDING_KEY = "SETTINGS_PREVIEW_MEDIA_BEFORE_SENDING_KEY";
+
     public static final String SETTINGS_USE_RAGE_SHAKE_KEY = "SETTINGS_USE_RAGE_SHAKE_KEY";
 
     private static final String SETTINGS_DISPLAY_ALL_EVENTS_KEY = "SETTINGS_DISPLAY_ALL_EVENTS_KEY";
@@ -162,6 +165,7 @@ public class PreferencesManager {
             SETTINGS_HIDE_AVATAR_DISPLAY_NAME_CHANGES_MESSAGES_KEY,
             SETTINGS_MEDIA_SAVING_PERIOD_KEY,
             SETTINGS_MEDIA_SAVING_PERIOD_SELECTED_KEY,
+            SETTINGS_PREVIEW_MEDIA_BEFORE_SENDING_KEY,
 
             SETTINGS_PIN_UNREAD_MESSAGES_PREFERENCE_KEY,
             SETTINGS_PIN_MISSED_NOTIFICATIONS_PREFERENCE_KEY,
@@ -231,31 +235,11 @@ public class PreferencesManager {
      *
      * @param context the context
      */
-    public static void setDidAskUserToIgnoreBatteryOptimizations(Context context, boolean asked) {
+    public static void setDidAskUserToIgnoreBatteryOptimizations(Context context) {
         PreferenceManager.getDefaultSharedPreferences(context)
                 .edit()
-                .putBoolean(DID_ASK_TO_IGNORE_BATTERY_OPTIMIZATIONS_KEY, asked)
+                .putBoolean(DID_ASK_TO_IGNORE_BATTERY_OPTIMIZATIONS_KEY, true)
                 .apply();
-    }
-
-    /**
-     * Tells if the application ignores battery optimizations.
-     * <p>
-     * Ignoring them allows the app to run in background to make background sync with the homeserver.
-     * This user option appears on Android M but Android O enforces its usage and kills apps not
-     * authorised by the user to run in background.
-     *
-     * @param context the context
-     * @return true if battery optimisations are ignored
-     */
-    @SuppressLint("NewApi")
-    public static boolean isIgnoringBatteryOptimizations(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return ((PowerManager) context.getSystemService(context.POWER_SERVICE)).isIgnoringBatteryOptimizations(context.getPackageName());
-        }
-
-        // no issue before Android M, battery optimisations did not exist
-        return true;
     }
 
     /**
@@ -312,9 +296,9 @@ public class PreferencesManager {
      * Update the notification ringtone
      *
      * @param context the context
-     * @param uri     the new notification ringtone
+     * @param uri     the new notification ringtone, or null for no RingTone
      */
-    public static void setNotificationRingTone(Context context, Uri uri) {
+    public static void setNotificationRingTone(Context context, @Nullable Uri uri) {
         SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(context).edit();
 
         String value = "";
@@ -338,8 +322,9 @@ public class PreferencesManager {
      * Provides the selected notification ring tone
      *
      * @param context the context
-     * @return the selected ring tone
+     * @return the selected ring tone or null for no RingTone
      */
+    @Nullable
     public static Uri getNotificationRingTone(Context context) {
         String url = PreferenceManager.getDefaultSharedPreferences(context).getString(SETTINGS_NOTIFICATION_RINGTONE_PREFERENCE_KEY, null);
 
@@ -355,7 +340,7 @@ public class PreferencesManager {
             try {
                 uri = Uri.parse(url);
             } catch (Exception e) {
-                Log.e(LOG_TAG, "## getNotificationRingTone() : Uri.parse failed");
+                Log.e(LOG_TAG, "## getNotificationRingTone() : Uri.parse failed", e);
             }
         }
 
@@ -371,8 +356,9 @@ public class PreferencesManager {
      * Provide the notification ringtone filename
      *
      * @param context the context
-     * @return the filename
+     * @return the filename or null if "None" is selected
      */
+    @Nullable
     public static String getNotificationRingToneName(Context context) {
         Uri toneUri = getNotificationRingTone(context);
 
@@ -397,7 +383,7 @@ public class PreferencesManager {
                 name = name.substring(0, name.lastIndexOf("."));
             }
         } catch (Exception e) {
-            Log.e(LOG_TAG, "## getNotificationRingToneName() failed() : " + e.getMessage());
+            Log.e(LOG_TAG, "## getNotificationRingToneName() failed() : " + e.getMessage(), e);
         } finally {
             if (cursor != null) {
                 cursor.close();
@@ -689,6 +675,16 @@ public class PreferencesManager {
                 .edit()
                 .putBoolean(SETTINGS_USE_ANALYTICS_KEY, useAnalytics)
                 .apply();
+    }
+
+    /**
+     * Tells if media should be previewed before sending
+     *
+     * @param context the context
+     * @return true to preview media
+     */
+    public static boolean previewMediaWhenSending(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(SETTINGS_PREVIEW_MEDIA_BEFORE_SENDING_KEY, false);
     }
 
     /**

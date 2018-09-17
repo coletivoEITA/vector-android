@@ -47,7 +47,7 @@ import im.vector.receiver.VectorUniversalLinkReceiver;
  * Dummy activity used to dispatch the vector URL links.
  */
 @SuppressLint("LongLogTag")
-public class VectorUniversalLinkActivity extends RiotAppCompatActivity {
+public class VectorUniversalLinkActivity extends VectorAppCompatActivity {
     private static final String LOG_TAG = VectorUniversalLinkActivity.class.getSimpleName();
 
     @Override
@@ -103,7 +103,7 @@ public class VectorUniversalLinkActivity extends RiotAppCompatActivity {
                 intentAction = VectorUniversalLinkReceiver.BROADCAST_ACTION_UNIVERSAL_LINK;
             }
         } catch (Exception ex) {
-            Log.e(LOG_TAG, "## onCreate(): Exception - Msg=" + ex.getMessage());
+            Log.e(LOG_TAG, "## onCreate(): Exception - Msg=" + ex.getMessage(), ex);
         }
 
         if (null != intentAction) {
