@@ -32,7 +32,7 @@ public class CloudFolder {
 
     public TreeNode<Dir> toTreeNode(CloudFolder selected) {
         TreeNode<Dir> ret = new TreeNode<>(new Dir(this.name,this.id));
-        if (this.id == selected.id) {
+        if (selected != null && this.id == selected.id) {
             ret.getContent().isSelected = true;
         }
 
