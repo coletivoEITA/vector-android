@@ -16,13 +16,15 @@ android {
     }
 
     defaultConfig {
-        applicationId 'br.org.rios.app'
+        applicationId "im.vector"
         minSdkVersion 16
         targetSdkVersion 26
         // use the version code
+        versionCode rootProject.ext.versionCodeProp
         versionName rootProject.ext.versionNameProp
+
         // custom values
-        resValue "string", "bug_report_url", "https://bugs.rios.org.br/api/submit"
+        resValue "string", "bug_report_url",  "https://riot.im/bugreports/submit"
 
         ndk {
             abiFilters "armeabi-v7a", "x86"
@@ -82,12 +84,11 @@ android {
     }
 
     // Specifies a flavor dimension (no need to specify it in each productsFlavor, cause we only declare one dimension).
-    //flavorDimensions "flavor_dimension_vector"
-    flavorDimensions "store"
+    flavorDimensions "flavor_dimension_vector"
 
     productFlavors {
         app {
-            applicationId 'br.org.rios.app'
+            applicationId "im.vector.alpha"
             // use the version name
             versionCode rootProject.ext.versionCodeProp
             versionName rootProject.ext.versionNameProp
@@ -95,10 +96,10 @@ android {
             resValue "string", "allow_ga_use", "true"
             resValue "string", "short_flavor_description", "G"
             resValue "string", "flavor_description", "GooglePlay"
-            dimension 'store'
         }
+
         appfdroid {
-            applicationId 'br.org.rios.app'
+            applicationId "im.vector.alpha"
             // use the version name
             versionCode rootProject.ext.versionCodeProp
             versionName rootProject.ext.versionNameProp
@@ -106,7 +107,18 @@ android {
             resValue "string", "allow_ga_use", "false"
             resValue "string", "short_flavor_description", "F"
             resValue "string", "flavor_description", "FDroid"
-            dimension 'store'
+        }
+
+        apprioschat {
+            applicationId "br.org.rios.app"
+            // use the version name
+            versionCode rootProject.ext.versionCodeProp
+            versionName rootProject.ext.versionNameProp
+            resValue "string", "allow_gcm_use", "true"
+            resValue "string", "allow_ga_use", "true"
+            resValue "string", "short_flavor_description", "R"
+            resValue "string", "flavor_description", "RIOS Chat in GooglePlay"
+            resValue "string", "bug_report_url", "https://bugs.rios.org.br/api/submit"
         }
     }
 
@@ -222,11 +234,16 @@ dependencies {
     implementation 'org.piwik.sdk:piwik-sdk:2.0.0'
 
     /************* flavors management **************/
+
     // app flavor only
     appImplementation 'com.google.firebase:firebase-core:16.0.3'
     appImplementation 'com.google.firebase:firebase-messaging:17.3.0'
 
-    // appfdroid flavor only
+    // fdroid flavor only
+
+    // rioschat flavor only
+    apprioschatImplementation 'com.google.firebase:firebase-core:16.0.3'
+    apprioschatImplementation 'com.google.firebase:firebase-messaging:17.3.0'
 }
 
 

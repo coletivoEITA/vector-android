@@ -203,7 +203,7 @@ public class BugReporter {
                     // build the multi part request
                     BugReporterMultipartBody.Builder builder = new BugReporterMultipartBody.Builder()
                             .addFormDataPart("text", bugDescription)
-                            .addFormDataPart("app", "rios-chat-android")
+                            .addFormDataPart("app", "riot-android")
                             .addFormDataPart("user_agent", "Android")
                             .addFormDataPart("user_id", userId)
                             .addFormDataPart("device_id", deviceId)

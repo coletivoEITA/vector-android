@@ -411,12 +411,12 @@ public class VectorUniversalLinkReceiver extends BroadcastReceiver {
                 return null;
             }
 
-            if (!TextUtils.equals(uri.getHost(), "vector.im") && !TextUtils.equals(uri.getHost(), "riot.im") && !TextUtils.equals(uri.getHost(), "matrix.to") && !TextUtils.equals(uri.getHost(), "rios.org.br")) {
+            if (!TextUtils.equals(uri.getHost(), "vector.im") && !TextUtils.equals(uri.getHost(), "riot.im") && !TextUtils.equals(uri.getHost(), "matrix.to") && !TextUtils.equals(uri.getHost(), "chat.rios.org.br")) {
                 Log.e(LOG_TAG, "## parseUniversalLink : unsupported host " + uri.getHost());
                 return null;
             }
 
-            boolean isSupportedHost = TextUtils.equals(uri.getHost(), "vector.im") || TextUtils.equals(uri.getHost(), "riot.im") || TextUtils.equals(uri.getHost(), "rios.org.br");
+            boolean isSupportedHost = TextUtils.equals(uri.getHost(), "vector.im") || TextUtils.equals(uri.getHost(), "riot.im") || TextUtils.equals(uri.getHost(), "chat.rios.org.br");
 
             // when the uri host is vector.im, it is followed by a dedicated path
             if (isSupportedHost && !mSupportedVectorLinkPaths.contains(uri.getPath())) {

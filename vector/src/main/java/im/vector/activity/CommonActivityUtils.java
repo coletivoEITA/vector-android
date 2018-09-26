@@ -1479,7 +1479,7 @@ public class CommonActivityUtils {
             public void onSuccess(byte[] bytesArray) {
                 try {
                     ByteArrayInputStream stream = new ByteArrayInputStream(bytesArray);
-                    String url = session.getMediasCache().saveMedia(stream, "rios-" + System.currentTimeMillis() + ".txt", "text/plain");
+                    String url = session.getMediasCache().saveMedia(stream, "riot-" + System.currentTimeMillis() + ".txt", "text/plain");
                     stream.close();
 
                     saveMediaIntoDownloads(appContext,

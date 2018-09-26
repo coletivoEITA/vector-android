@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<resources>
+    <!-- permissions Android M -->
+    <string name="permissions_rationale_popup_title">Informação</string>
+    <string name="permissions_rationale_msg_storage">O RIOS Chat necessita permissão para acessar sua galeria de fotos e vídeos para poder enviar e salvar anexos.\n\nPor favor, permita acesso na próxima tela para poder enviar arquivos do seu celular.</string>
+    <string name="permissions_rationale_msg_camera">O RIOS Chat necessita permissão para acessar sua câmera para poder tirar fotos e fazer chamadas de vídeo.</string>
+    <string name="permissions_rationale_msg_record_audio">O RIOS Chat necessita permissão para acessar seu microfone para realizar chamadas de áudio.</string>
+    <string name="permissions_rationale_msg_camera_and_audio">O RIOS Chat necessita permissão para acessar sua câmera e seu microfone para realizar chamadas de vídeo.\n\nPor favor, permita acesso na próxima tela para poder fazer a chamada.</string>
+    <string name="permissions_rationale_msg_contacts">O RIOS Chat necessita permissão para acessar os seus contatos para poder encontrar outros usuários a partir de seus emails e números de telefone.\n\nPor favor, permita acesso na próxima tela para poder encontrar usuários na sua agenda que podem ser contactados pelo RIOS Chat.</string>
+    <string name="permissions_msg_contacts_warning_other_androids">O RIOS Chat necessita permissão para acessar os seus contatos para poder encontrar usuários na sua agenda a partir de seus emails e números de telefone.\n\nVocê autoriza o RIOS Chat a acessar seus contatos?</string>
+
+    <string name="e2e_enabling_on_app_update">O RIOS Chat agora permite criptografia ponta-a-ponta mas você precisa fazer login de novo para ativá-la.\n\nVocê pode fazer isso mais tarde a partir das configurações do aplicativo.</string>
+
+    <string name="settings_opt_out_of_analytics_summary">O RIOS Chat coleta dados anônimos para podermos melhorar o aplicativo.</string>
+
+    <string name="e2e_re_request_encryption_key_dialog_content">Por favor, use o RIOS Chat em outro dispositivo que possa descriptografar a mensagem de modo que possa enviar as chaves a este dispositivo.</string>
+
+    <string name="settings_notification_privacy_warning">O RIOS Chat funciona em segundo plano para garantir a confidencialidade das suas mensagens de notificação. Você pode alterar esta opção para reduzir o uso da bateria.</string>
+
+    <string name="startup_notification_privacy_message">O RIOS Chat pode funcionar em segundo plano para gerenciar as suas notificações de forma segura e confidencial (isso poderá impactar no uso da bateria).</string>
+
+    <string name="settings_opt_in_of_analytics_summary">O RIOS Chat coleta dados de uso anônimos para nos ajudar a melhorar o aplicativo.</string>
+    <string name="settings_opt_in_of_analytics_prompt">Por favor, habilite o envio de dados de uso para nos ajudar a melhorar o RIOS Chat.</string>
+
+    <!-- RIOS -->
+    <string name="room_settings_room_defauult_folder_title">Pasta padrão para envio de arquivos</string>
+    <!-- cloud folder destination selection -->
+    <string name="cloud_folder_options">Pasta de destino</string>
+    <string name="rios_choose_folder_message_ok">Enviar</string>
+
+    <string name="widget_no_power_to_manage">Você necessita ter permissões para poder gerenciar os widgets desta sala</string>
+    <string name="widget_creation_failure">A criação do widget falhou</string>
+    <string name="event_formatter_widget_added">%1$s adicionada/o por %2$s</string>
+    <string name="event_formatter_widget_removed">%1$s removida/o por %2$s</string>
+    <string name="settings_labs_create_conference_with_jitsi">Criar chamadas de conferência com jitsi</string>
+    <string name="widget_delete_message_confirmation">Você tem certeza que quer apagar este widget?</string>
+</resources>

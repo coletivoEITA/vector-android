@@ -338,7 +338,7 @@
 
                 <data android:scheme="http" />
                 <data android:scheme="https" />
-                <data android:host="rios.org.br" />
+                <data android:host="riot.im" />
                 <data android:pathPrefix="/app/" />
                 <data android:pathPrefix="/beta/" />
                 <data android:pathPrefix="/develop/" />
@@ -419,7 +419,7 @@
 
                 <data android:scheme="http" />
                 <data android:scheme="https" />
-                <data android:host="rios.org.br" />
+                <data android:host="riot.im" />
                 <data android:pathPrefix="/app/" />
                 <data android:pathPrefix="/beta/" />
                 <data android:pathPrefix="/develop/" />

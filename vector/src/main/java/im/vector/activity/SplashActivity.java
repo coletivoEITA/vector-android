@@ -173,7 +173,7 @@ public class SplashActivity extends MXCActionBarActivity {
 
         // Load the Gif logo
         Glide.with(this)
-                .load(R.drawable.rios_chat_splash)
+                .load(R.drawable.riot_splash)
                 .into(animatedLogo);
 
         List<String> matrixIds = new ArrayList<>();
